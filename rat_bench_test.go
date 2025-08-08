@@ -9,7 +9,7 @@ import (
 func BenchmarkZeroRat_Construction(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = NewRat(int64(i%1000), uint64((i%999)+1))
+		_ = New(int64(i%1000), uint64((i%999)+1))
 	}
 }
 
@@ -24,8 +24,8 @@ func BenchmarkBigRat_Construction(b *testing.B) {
 
 // BenchmarkZeroRat_Add benchmarks ZeroRat addition
 func BenchmarkZeroRat_Add(b *testing.B) {
-	r1 := NewRat(3, 4)
-	r2 := NewRat(1, 3)
+	r1 := New(3, 4)
+	r2 := New(1, 3)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r := r1
@@ -48,8 +48,8 @@ func BenchmarkBigRat_Add(b *testing.B) {
 
 // BenchmarkZeroRat_AddImmutable benchmarks ZeroRat immutable addition
 func BenchmarkZeroRat_AddImmutable(b *testing.B) {
-	r1 := NewRat(3, 4)
-	r2 := NewRat(1, 3)
+	r1 := New(3, 4)
+	r2 := New(1, 3)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r := r1.Added(r2)
@@ -59,8 +59,8 @@ func BenchmarkZeroRat_AddImmutable(b *testing.B) {
 
 // BenchmarkZeroRat_Mul benchmarks ZeroRat multiplication
 func BenchmarkZeroRat_Mul(b *testing.B) {
-	r1 := NewRat(3, 4)
-	r2 := NewRat(5, 7)
+	r1 := New(3, 4)
+	r2 := New(5, 7)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r := r1
@@ -83,8 +83,8 @@ func BenchmarkBigRat_Mul(b *testing.B) {
 
 // BenchmarkZeroRat_Div benchmarks ZeroRat division
 func BenchmarkZeroRat_Div(b *testing.B) {
-	r1 := NewRat(3, 4)
-	r2 := NewRat(5, 7)
+	r1 := New(3, 4)
+	r2 := New(5, 7)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r := r1
@@ -107,8 +107,8 @@ func BenchmarkBigRat_Div(b *testing.B) {
 
 // BenchmarkZeroRat_Equal benchmarks ZeroRat equality comparison
 func BenchmarkZeroRat_Equal(b *testing.B) {
-	r1 := NewRat(3, 4)
-	r2 := NewRat(6, 8) // equivalent fraction
+	r1 := New(3, 4)
+	r2 := New(6, 8) // equivalent fraction
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		result := r1.Equal(r2)
@@ -129,7 +129,7 @@ func BenchmarkBigRat_Equal(b *testing.B) {
 
 // BenchmarkZeroRat_String benchmarks ZeroRat string conversion
 func BenchmarkZeroRat_String(b *testing.B) {
-	r := NewRat(355, 113) // approximation of π
+	r := New(355, 113) // approximation of π
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		s := r.String()
@@ -150,11 +150,11 @@ func BenchmarkBigRat_String(b *testing.B) {
 // BenchmarkZeroRat_ComplexExpression benchmarks complex arithmetic expression
 func BenchmarkZeroRat_ComplexExpression(b *testing.B) {
 	// Compute: (3/4 + 1/3) * (5/7 - 2/9) / (11/13)
-	a := NewRat(3, 4)
-	b1 := NewRat(1, 3)
-	c := NewRat(5, 7)
-	d := NewRat(2, 9)
-	e := NewRat(11, 13)
+	a := New(3, 4)
+	b1 := New(1, 3)
+	c := New(5, 7)
+	d := New(2, 9)
+	e := New(11, 13)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -191,7 +191,7 @@ func BenchmarkZeroRat_ArrayOperations(b *testing.B) {
 	// Create array of rational numbers
 	rationals := make([]Rat, 100)
 	for i := range rationals {
-		rationals[i] = NewRat(int64(i+1), uint64(i+2))
+		rationals[i] = New(int64(i+1), uint64(i+2))
 	}
 
 	b.ResetTimer()
@@ -226,8 +226,8 @@ func BenchmarkBigRat_ArrayOperations(b *testing.B) {
 
 // BenchmarkZeroRat_MemoryAllocation tests memory allocation for ZeroRat operations
 func BenchmarkZeroRat_MemoryAllocation(b *testing.B) {
-	r1 := NewRat(3, 4)
-	r2 := NewRat(5, 7)
+	r1 := New(3, 4)
+	r2 := New(5, 7)
 
 	b.ReportAllocs()
 	b.ResetTimer()

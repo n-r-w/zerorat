@@ -15,9 +15,9 @@ type Rat struct {
 	denominator uint64 // Denominator (always positive, 0 = invalid state)
 }
 
-// NewRat creates a new rational number with given numerator and denominator.
+// New creates a new rational number with given numerator and denominator.
 // Returns a value, not a pointer.
-func NewRat(numerator int64, denominator uint64) (r Rat) {
+func New(numerator int64, denominator uint64) (r Rat) {
 	defer r.Reduce()
 
 	// If denominator is 0, return invalid state
@@ -34,10 +34,30 @@ func NewRat(numerator int64, denominator uint64) (r Rat) {
 	return Rat{numerator: numerator, denominator: denominator}
 }
 
-// NewRatFromInt creates a rational number from an integer.
+// NewFromInt creates a rational number from an integer.
 // Equivalent to NewRat(value, 1).
-func NewRatFromInt(value int64) Rat {
+func NewFromInt(value int64) Rat {
 	return Rat{numerator: value, denominator: 1}
+}
+
+// NewFromFloat64 creates a rational number from a float64 with minimum precision loss.
+// Returns invalid state (denominator = 0) for special values: NaN, +Inf, -Inf.
+// Returns invalid state if the conversion would overflow int64/uint64 limits.
+func NewFromFloat64(value float64) (r Rat) {
+	defer r.Reduce()
+
+	// Handle special cases
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return Rat{numerator: 0, denominator: 0} // invalid state
+	}
+
+	// Handle zero (including negative zero)
+	if value == 0.0 {
+		return Rat{numerator: 0, denominator: 1}
+	}
+
+	// Use IEEE 754 decomposition for exact conversion
+	return float64ToRatExact(value)
 }
 
 // Zero returns a rational number representing zero (0/1).
@@ -322,6 +342,16 @@ func (r *Rat) Less(other Rat) bool {
 	return compareRationalsCrossMul(r.numerator, r.denominator, other.numerator, other.denominator) < 0
 }
 
+// Greater checks if current rational number is greater than another.
+// Returns false for any invalid operands, consistent with comparison semantics.
+func (r *Rat) Greater(other Rat) bool {
+	// Invalid operands cannot be ordered
+	if r.IsInvalid() || other.IsInvalid() {
+		return false
+	}
+	return compareRationalsCrossMul(r.numerator, r.denominator, other.numerator, other.denominator) > 0
+}
+
 // Compare performs three-way comparison of rational numbers.
 // Returns -1 if r < other, 0 if r == other, 1 if r > other.
 // Returns 0 for any invalid operands (cannot be meaningfully compared).
@@ -563,4 +593,67 @@ func compareRationalsCrossMul(aNum int64, aDenom uint64, cNum int64, cDenom uint
 	}
 	// Both positive: use direct magnitude comparison
 	return cmpResult
+}
+
+// float64ToRatExact converts a float64 to its exact rational representation.
+// Returns invalid state if conversion would overflow int64/uint64 limits.
+//
+//nolint:mnd // magic numbers are fine here
+func float64ToRatExact(value float64) Rat {
+	if math.IsNaN(value) {
+		return Rat{}
+	}
+	if value < -9.223372036854775e+18 || value > 9.223372036854775e+18 {
+		return Rat{}
+	}
+	if value > -2.168404344971009e-19 && value < 2.168404344971009e-19 {
+		return Rat{}
+	}
+
+	// Decompose float64
+	fBits := math.Float64bits(value)
+	isNegative := fBits&(1<<63) != 0
+	exp := int64((fBits>>52)&(1<<11-1)) - 1023
+	mantissa := (fBits & (1<<52 - 1)) | 1<<52 // Since we discarded tiny values, it'll never be denormalized.
+
+	// Amount of times to shift the mantissa to the right to compensate for the exponent
+	shift := 52 - exp
+
+	// Reduce shift and mantissa as far as we can
+	for mantissa&1 == 0 && shift > 0 {
+		mantissa >>= 1
+		shift--
+	}
+
+	// Choose whether to shift the numerator or denominator
+	var shiftN, shiftD int64 = 0, 0
+	if shift > 0 {
+		shiftD = shift
+	} else {
+		shiftN = shift
+	}
+
+	// Shift that require larger shifts that what an int64 can hold, or larger than the mantissa itself, will be
+	// approximated splitting it between the numerator and denominator.
+	if shiftD > 62 {
+		shiftD = 62
+		shiftN = shift - 62
+	} else if shiftN > 52 {
+		shiftN = 52
+		shiftD = shift - 52
+	}
+
+	numerator, denominator := int64(mantissa), int64(1)
+	denominator <<= shiftD
+	if shiftN < 0 {
+		numerator <<= -shiftN
+	} else {
+		numerator >>= shiftN
+	}
+
+	if isNegative {
+		numerator *= -1
+	}
+
+	return Rat{numerator: numerator, denominator: uint64(denominator)}
 }

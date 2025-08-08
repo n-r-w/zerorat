@@ -135,7 +135,7 @@ func TestNewRat_ValidInputs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewRat(tt.numerator, tt.denominator)
+			r := New(tt.numerator, tt.denominator)
 			assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
 			assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
 		})
@@ -168,7 +168,7 @@ func TestNewRat_InvalidInputs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewRat(tt.numerator, tt.denominator)
+			r := New(tt.numerator, tt.denominator)
 			assert.Equal(t, uint64(0), r.denominator, "should be invalid (denominator = 0)")
 		})
 	}
@@ -203,7 +203,7 @@ func TestNewRat_SignNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewRat(tt.numerator, tt.denominator)
+			r := New(tt.numerator, tt.denominator)
 			assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
 			assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
 		})
@@ -252,9 +252,281 @@ func TestNewRatFromInt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewRatFromInt(tt.value)
+			r := NewFromInt(tt.value)
 			assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
 			assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+		})
+	}
+}
+
+// TestNewRatFromFloat64 tests creation of rational number from float64 with minimum precision loss
+func TestNewRatFromFloat64(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     float64
+		wantNum   int64
+		wantDenom uint64
+	}{
+		// Simple cases
+		{
+			name:      "zero",
+			value:     0.0,
+			wantNum:   0,
+			wantDenom: 1,
+		},
+		{
+			name:      "positive integer",
+			value:     42.0,
+			wantNum:   42,
+			wantDenom: 1,
+		},
+		{
+			name:      "negative integer",
+			value:     -17.0,
+			wantNum:   -17,
+			wantDenom: 1,
+		},
+		// Simple fractions
+		{
+			name:      "one half",
+			value:     0.5,
+			wantNum:   1,
+			wantDenom: 2,
+		},
+		{
+			name:      "negative one half",
+			value:     -0.5,
+			wantNum:   -1,
+			wantDenom: 2,
+		},
+		{
+			name:      "one quarter",
+			value:     0.25,
+			wantNum:   1,
+			wantDenom: 4,
+		},
+		{
+			name:      "three quarters",
+			value:     0.75,
+			wantNum:   3,
+			wantDenom: 4,
+		},
+		// Decimal fractions - these will be exact binary representations, not simplified decimals
+		// 0.1 in binary is exactly 3602879701896397/36028797018963968 after reduction
+		{
+			name:      "one tenth",
+			value:     0.1,
+			wantNum:   3602879701896397,
+			wantDenom: 36028797018963968,
+		},
+		// 0.01 in binary is exactly 5764607523034235/576460752303423488 after reduction
+		{
+			name:      "one hundredth",
+			value:     0.01,
+			wantNum:   5764607523034235,
+			wantDenom: 576460752303423488,
+		},
+		{
+			name:      "decimal 0.125",
+			value:     0.125,
+			wantNum:   1,
+			wantDenom: 8,
+		},
+		{
+			name:      "decimal 0.375",
+			value:     0.375,
+			wantNum:   3,
+			wantDenom: 8,
+		},
+		// Mixed numbers
+		{
+			name:      "one and half",
+			value:     1.5,
+			wantNum:   3,
+			wantDenom: 2,
+		},
+		{
+			name:      "two and quarter",
+			value:     2.25,
+			wantNum:   9,
+			wantDenom: 4,
+		},
+		{
+			name:      "negative mixed",
+			value:     -3.75,
+			wantNum:   -15,
+			wantDenom: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewFromFloat64(tt.value)
+			assert.True(t, r.IsValid(), "rational should be valid")
+			assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+			assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+		})
+	}
+}
+
+// TestNewRatFromFloat64_SpecialValues tests special float64 values
+func TestNewRatFromFloat64_SpecialValues(t *testing.T) {
+	tests := []struct {
+		name            string
+		value           float64
+		shouldBeInvalid bool
+	}{
+		{
+			name:            "positive infinity",
+			value:           math.Inf(1),
+			shouldBeInvalid: true,
+		},
+		{
+			name:            "negative infinity",
+			value:           math.Inf(-1),
+			shouldBeInvalid: true,
+		},
+		{
+			name:            "NaN",
+			value:           math.NaN(),
+			shouldBeInvalid: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewFromFloat64(tt.value)
+			if tt.shouldBeInvalid {
+				assert.True(t, r.IsInvalid(), "should be invalid for %s (denominator should be 0)", tt.name)
+				assert.Equal(t, uint64(0), r.denominator, "invalid rational should have denominator = 0")
+			} else {
+				assert.True(t, r.IsValid(), "should be valid for %s", tt.name)
+				assert.Positive(t, r.denominator, "valid rational should have denominator > 0")
+			}
+		})
+	}
+}
+
+// TestNewRatFromFloat64_PrecisionLoss tests that the constructor minimizes precision loss
+func TestNewRatFromFloat64_PrecisionLoss(t *testing.T) {
+	tests := []struct {
+		name        string
+		value       float64
+		description string
+	}{
+		{
+			name:        "repeating decimal 1/3",
+			value:       1.0 / 3.0,
+			description: "should find a good rational approximation for 1/3",
+		},
+		{
+			name:        "repeating decimal 2/3",
+			value:       2.0 / 3.0,
+			description: "should find a good rational approximation for 2/3",
+		},
+		{
+			name:        "pi approximation",
+			value:       3.141592653589793,
+			description: "should find a good rational approximation for pi",
+		},
+		{
+			name:        "e approximation",
+			value:       2.718281828459045,
+			description: "should find a good rational approximation for e",
+		},
+		{
+			name:        "very small positive",
+			value:       1e-10,
+			description: "should handle very small positive numbers",
+		},
+		{
+			name:        "very small negative",
+			value:       -1e-10,
+			description: "should handle very small negative numbers",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewFromFloat64(tt.value)
+			assert.True(t, r.IsValid(), "should be valid: %s", tt.description)
+
+			// Convert back to float64 and check that we're reasonably close
+			backToFloat := float64(r.numerator) / float64(r.denominator)
+			diff := math.Abs(backToFloat - tt.value)
+			relativeError := diff / math.Abs(tt.value)
+
+			// Allow for some reasonable tolerance (e.g., 1e-15 for most cases)
+			tolerance := 1e-15
+			if math.Abs(tt.value) < 1e-10 {
+				// For very small numbers, use absolute tolerance
+				tolerance = 1e-20
+			}
+
+			assert.True(t, relativeError < tolerance || diff < tolerance,
+				"precision loss too high: value=%g, rational=%d/%d, back=%g, diff=%g, rel_err=%g",
+				tt.value, r.numerator, r.denominator, backToFloat, diff, relativeError)
+		})
+	}
+}
+
+// TestNewRatFromFloat64_EdgeCases tests edge cases and boundary conditions
+func TestNewRatFromFloat64_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name         string
+		value        float64
+		description  string
+		mayBeInvalid bool // true if overflow to invalid state is acceptable
+	}{
+		{
+			name:        "max safe integer",
+			value:       9007199254740992.0, // 2^53, largest integer exactly representable in float64
+			description: "should handle max safe integer",
+		},
+		{
+			name:        "min safe integer",
+			value:       -9007199254740992.0, // -2^53
+			description: "should handle min safe integer",
+		},
+		{
+			name:        "smallest positive normal",
+			value:       math.SmallestNonzeroFloat64,
+			description: "should handle smallest positive normal float64",
+		},
+		{
+			name:         "largest finite",
+			value:        math.MaxFloat64,
+			description:  "largest finite float64 may overflow to invalid state",
+			mayBeInvalid: true, // This is likely to overflow int64/uint64 limits
+		},
+		{
+			name:        "negative zero",
+			value:       math.Copysign(0.0, -1),
+			description: "should handle negative zero same as positive zero",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewFromFloat64(tt.value)
+
+			if tt.mayBeInvalid {
+				// For values that may overflow, either valid or invalid is acceptable
+				t.Logf("%s result: valid=%v, num=%d, denom=%d", tt.name, r.IsValid(), r.numerator, r.denominator)
+				if r.IsInvalid() {
+					assert.Equal(t, uint64(0), r.denominator, "invalid rational should have denominator = 0")
+				}
+				return
+			}
+
+			assert.True(t, r.IsValid(), "should be valid: %s", tt.description)
+			assert.Positive(t, r.denominator, "valid rational should have denominator > 0")
+
+			// For negative zero, should be same as positive zero
+			if tt.value == 0.0 || tt.value == math.Copysign(0.0, -1) {
+				assert.Equal(t, int64(0), r.numerator, "zero should have numerator 0")
+				assert.Equal(t, uint64(1), r.denominator, "zero should have denominator 1")
+			}
 		})
 	}
 }
@@ -321,7 +593,7 @@ func TestNewRat_AutomaticReduction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rat := NewRat(tt.num, tt.denom)
+			rat := New(tt.num, tt.denom)
 			assert.Equal(t, tt.wantNum, rat.Numerator(), "Numerator should be reduced")
 			assert.Equal(t, tt.wantDenom, rat.Denominator(), "Denominator should be reduced")
 		})
@@ -330,7 +602,7 @@ func TestNewRat_AutomaticReduction(t *testing.T) {
 
 // TestRat_FieldAccess tests struct field access
 func TestRat_FieldAccess(t *testing.T) {
-	r := NewRat(3, 4)
+	r := New(3, 4)
 
 	// Verify fields are accessible (this compiles)
 	assert.Equal(t, int64(3), r.numerator)
@@ -346,32 +618,32 @@ func TestRat_IsValid(t *testing.T) {
 	}{
 		{
 			name:     "valid positive fraction",
-			rat:      NewRat(3, 4),
+			rat:      New(3, 4),
 			expected: true,
 		},
 		{
 			name:     "valid negative fraction",
-			rat:      NewRat(-5, 7),
+			rat:      New(-5, 7),
 			expected: true,
 		},
 		{
 			name:     "valid zero",
-			rat:      NewRat(0, 1),
+			rat:      New(0, 1),
 			expected: true,
 		},
 		{
 			name:     "valid integer",
-			rat:      NewRat(42, 1),
+			rat:      New(42, 1),
 			expected: true,
 		},
 		{
 			name:     "invalid zero denominator",
-			rat:      NewRat(5, 0),
+			rat:      New(5, 0),
 			expected: false,
 		},
 		{
 			name:     "invalid zero denominator with zero numerator",
-			rat:      NewRat(0, 0),
+			rat:      New(0, 0),
 			expected: false,
 		},
 	}
@@ -393,27 +665,27 @@ func TestRat_IsInvalid(t *testing.T) {
 	}{
 		{
 			name:     "valid positive fraction",
-			rat:      NewRat(3, 4),
+			rat:      New(3, 4),
 			expected: false,
 		},
 		{
 			name:     "valid negative fraction",
-			rat:      NewRat(-5, 7),
+			rat:      New(-5, 7),
 			expected: false,
 		},
 		{
 			name:     "valid zero",
-			rat:      NewRat(0, 1),
+			rat:      New(0, 1),
 			expected: false,
 		},
 		{
 			name:     "invalid zero denominator",
-			rat:      NewRat(5, 0),
+			rat:      New(5, 0),
 			expected: true,
 		},
 		{
 			name:     "invalid zero denominator with zero numerator",
-			rat:      NewRat(0, 0),
+			rat:      New(0, 0),
 			expected: true,
 		},
 	}
@@ -428,7 +700,7 @@ func TestRat_IsInvalid(t *testing.T) {
 
 // TestRat_Invalidate tests forced invalidation
 func TestRat_Invalidate(t *testing.T) {
-	r := NewRat(3, 4)
+	r := New(3, 4)
 	assert.True(t, r.IsValid(), "should be valid initially")
 
 	r.Invalidate()
@@ -442,45 +714,45 @@ func TestRat_ArithmeticOperations(t *testing.T) {
 		cases := []arithmeticTestCase{
 			{
 				name:      "positive fractions",
-				receiver:  NewRat(1, 2), // 1/2
-				other:     NewRat(1, 3), // 1/3
-				wantNum:   5,            // 1/2 + 1/3 = 3/6 + 2/6 = 5/6
+				receiver:  New(1, 2), // 1/2
+				other:     New(1, 3), // 1/3
+				wantNum:   5,         // 1/2 + 1/3 = 3/6 + 2/6 = 5/6
 				wantDenom: 6,
 			},
 			{
 				name:      "negative and positive",
-				receiver:  NewRat(-1, 2), // -1/2
-				other:     NewRat(1, 4),  // 1/4
-				wantNum:   -2,            // -1/2 + 1/4 = (-1*4 + 1*2)/(2*4) = (-4+2)/8 = -2/8
+				receiver:  New(-1, 2), // -1/2
+				other:     New(1, 4),  // 1/4
+				wantNum:   -2,         // -1/2 + 1/4 = (-1*4 + 1*2)/(2*4) = (-4+2)/8 = -2/8
 				wantDenom: 8,
 			},
 			{
 				name:      "same denominator",
-				receiver:  NewRat(3, 7), // 3/7
-				other:     NewRat(2, 7), // 2/7
-				wantNum:   5,            // 3/7 + 2/7 = 5/7
+				receiver:  New(3, 7), // 3/7
+				other:     New(2, 7), // 2/7
+				wantNum:   5,         // 3/7 + 2/7 = 5/7
 				wantDenom: 7,
 			},
 			{
 				name:      "add zero",
-				receiver:  NewRat(3, 4), // 3/4
-				other:     NewRat(0, 1), // 0
-				wantNum:   3,            // 3/4 + 0 = 3/4
+				receiver:  New(3, 4), // 3/4
+				other:     New(0, 1), // 0
+				wantNum:   3,         // 3/4 + 0 = 3/4
 				wantDenom: 4,
 			},
 			{
 				name:      "add to zero",
-				receiver:  NewRat(0, 1), // 0
-				other:     NewRat(2, 5), // 2/5
-				wantNum:   2,            // 0 + 2/5 = 2/5
+				receiver:  New(0, 1), // 0
+				other:     New(2, 5), // 2/5
+				wantNum:   2,         // 0 + 2/5 = 2/5
 				wantDenom: 5,
 			},
 			{
 				name:      "result is zero",
-				receiver:  NewRat(1, 2),  // 1/2
-				other:     NewRat(-1, 2), // -1/2
-				wantNum:   0,             // 1/2 + (-1/2) = 0
-				wantDenom: 1,             // should normalize to 0/1
+				receiver:  New(1, 2),  // 1/2
+				other:     New(-1, 2), // -1/2
+				wantNum:   0,          // 1/2 + (-1/2) = 0
+				wantDenom: 1,          // should normalize to 0/1
 			},
 		}
 		testArithmeticOperation(t, "Add", (*Rat).Add, cases)
@@ -490,30 +762,30 @@ func TestRat_ArithmeticOperations(t *testing.T) {
 		cases := []arithmeticTestCase{
 			{
 				name:      "positive fractions",
-				receiver:  NewRat(3, 4), // 3/4
-				other:     NewRat(1, 4), // 1/4
-				wantNum:   2,            // 3/4 - 1/4 = (3-1)/4 = 2/4 (same denominator optimization)
+				receiver:  New(3, 4), // 3/4
+				other:     New(1, 4), // 1/4
+				wantNum:   2,         // 3/4 - 1/4 = (3-1)/4 = 2/4 (same denominator optimization)
 				wantDenom: 4,
 			},
 			{
 				name:      "result negative",
-				receiver:  NewRat(1, 4), // 1/4
-				other:     NewRat(3, 4), // 3/4
-				wantNum:   -2,           // 1/4 - 3/4 = (1-3)/4 = -2/4 (same denominator optimization)
+				receiver:  New(1, 4), // 1/4
+				other:     New(3, 4), // 3/4
+				wantNum:   -2,        // 1/4 - 3/4 = (1-3)/4 = -2/4 (same denominator optimization)
 				wantDenom: 4,
 			},
 			{
 				name:      "subtract zero",
-				receiver:  NewRat(3, 4), // 3/4
-				other:     NewRat(0, 1), // 0
-				wantNum:   3,            // 3/4 - 0 = 3/4
+				receiver:  New(3, 4), // 3/4
+				other:     New(0, 1), // 0
+				wantNum:   3,         // 3/4 - 0 = 3/4
 				wantDenom: 4,
 			},
 			{
 				name:      "subtract from zero",
-				receiver:  NewRat(0, 1), // 0
-				other:     NewRat(2, 5), // 2/5
-				wantNum:   -2,           // 0 - 2/5 = -2/5
+				receiver:  New(0, 1), // 0
+				other:     New(2, 5), // 2/5
+				wantNum:   -2,        // 0 - 2/5 = -2/5
 				wantDenom: 5,
 			},
 		}
@@ -524,30 +796,30 @@ func TestRat_ArithmeticOperations(t *testing.T) {
 		cases := []arithmeticTestCase{
 			{
 				name:      "positive fractions",
-				receiver:  NewRat(2, 3), // 2/3
-				other:     NewRat(3, 4), // 3/4
-				wantNum:   6,            // 2/3 * 3/4 = (2*3)/(3*4) = 6/12 (no auto-reduction)
+				receiver:  New(2, 3), // 2/3
+				other:     New(3, 4), // 3/4
+				wantNum:   6,         // 2/3 * 3/4 = (2*3)/(3*4) = 6/12 (no auto-reduction)
 				wantDenom: 12,
 			},
 			{
 				name:      "multiply by zero",
-				receiver:  NewRat(5, 7), // 5/7
-				other:     NewRat(0, 1), // 0
-				wantNum:   0,            // 5/7 * 0 = 0
+				receiver:  New(5, 7), // 5/7
+				other:     New(0, 1), // 0
+				wantNum:   0,         // 5/7 * 0 = 0
 				wantDenom: 1,
 			},
 			{
 				name:      "multiply by one",
-				receiver:  NewRat(3, 4), // 3/4
-				other:     NewRat(1, 1), // 1
-				wantNum:   3,            // 3/4 * 1 = 3/4
+				receiver:  New(3, 4), // 3/4
+				other:     New(1, 1), // 1
+				wantNum:   3,         // 3/4 * 1 = 3/4
 				wantDenom: 4,
 			},
 			{
 				name:      "negative result",
-				receiver:  NewRat(-2, 3), // -2/3
-				other:     NewRat(3, 5),  // 3/5
-				wantNum:   -6,            // -2/3 * 3/5 = (-2*3)/(3*5) = -6/15 (no auto-reduction)
+				receiver:  New(-2, 3), // -2/3
+				other:     New(3, 5),  // 3/5
+				wantNum:   -6,         // -2/3 * 3/5 = (-2*3)/(3*5) = -6/15 (no auto-reduction)
 				wantDenom: 15,
 			},
 		}
@@ -558,23 +830,23 @@ func TestRat_ArithmeticOperations(t *testing.T) {
 		cases := []arithmeticTestCase{
 			{
 				name:      "positive fractions",
-				receiver:  NewRat(2, 3), // 2/3
-				other:     NewRat(3, 4), // 3/4
-				wantNum:   8,            // 2/3 ÷ 3/4 = 2/3 * 4/3 = 8/9
+				receiver:  New(2, 3), // 2/3
+				other:     New(3, 4), // 3/4
+				wantNum:   8,         // 2/3 ÷ 3/4 = 2/3 * 4/3 = 8/9
 				wantDenom: 9,
 			},
 			{
 				name:      "divide by one",
-				receiver:  NewRat(3, 4), // 3/4
-				other:     NewRat(1, 1), // 1
-				wantNum:   3,            // 3/4 ÷ 1 = 3/4
+				receiver:  New(3, 4), // 3/4
+				other:     New(1, 1), // 1
+				wantNum:   3,         // 3/4 ÷ 1 = 3/4
 				wantDenom: 4,
 			},
 			{
 				name:      "divide integer",
-				receiver:  NewRat(6, 1), // 6
-				other:     NewRat(2, 1), // 2
-				wantNum:   6,            // 6 ÷ 2 = 6/1 * 1/2 = 6/2 (no auto-reduction)
+				receiver:  New(6, 1), // 6
+				other:     New(2, 1), // 2
+				wantNum:   6,         // 6 ÷ 2 = 6/1 * 1/2 = 6/2 (no auto-reduction)
 				wantDenom: 2,
 			},
 		}
@@ -585,9 +857,9 @@ func TestRat_ArithmeticOperations(t *testing.T) {
 // TestRat_ArithmeticInvalidStatePropagation tests invalid state propagation for all operations
 func TestRat_ArithmeticInvalidStatePropagation(t *testing.T) {
 	invalidStateCases := []invalidStateTestCase{
-		{"invalid receiver", NewRat(5, 0), NewRat(1, 2)},
-		{"invalid other", NewRat(1, 2), NewRat(3, 0)},
-		{"both invalid", NewRat(5, 0), NewRat(3, 0)},
+		{"invalid receiver", New(5, 0), New(1, 2)},
+		{"invalid other", New(1, 2), New(3, 0)},
+		{"both invalid", New(5, 0), New(3, 0)},
 	}
 
 	t.Run("Add", func(t *testing.T) {
@@ -613,14 +885,14 @@ func TestRat_ArithmeticOverflowDetection(t *testing.T) {
 		overflowCases := []overflowTestCase{
 			{
 				name:     "numerator overflow in cross multiplication",
-				receiver: NewRat(9223372036854775807, 2), // MaxInt64/2
-				other:    NewRat(9223372036854775807, 3), // MaxInt64/3
+				receiver: New(9223372036854775807, 2), // MaxInt64/2
+				other:    New(9223372036854775807, 3), // MaxInt64/3
 				desc:     "cross multiplication overflow",
 			},
 			{
 				name:     "denominator overflow in multiplication",
-				receiver: NewRat(1, 18446744073709551615), // MaxUint64
-				other:    NewRat(1, 2),                    // Multiplying MaxUint64 * 2 should overflow
+				receiver: New(1, 18446744073709551615), // MaxUint64
+				other:    New(1, 2),                    // Multiplying MaxUint64 * 2 should overflow
 				desc:     "denominator overflow",
 			},
 		}
@@ -631,14 +903,14 @@ func TestRat_ArithmeticOverflowDetection(t *testing.T) {
 		overflowCases := []overflowTestCase{
 			{
 				name:     "numerator overflow",
-				receiver: NewRat(math.MaxInt64, 1),
-				other:    NewRat(2, 1), // MaxInt64 * 2 should overflow
+				receiver: New(math.MaxInt64, 1),
+				other:    New(2, 1), // MaxInt64 * 2 should overflow
 				desc:     "numerator multiplication overflow",
 			},
 			{
 				name:     "denominator overflow",
-				receiver: NewRat(1, math.MaxUint64),
-				other:    NewRat(1, 2), // MaxUint64 * 2 should overflow
+				receiver: New(1, math.MaxUint64),
+				other:    New(1, 2), // MaxUint64 * 2 should overflow
 				desc:     "denominator multiplication overflow",
 			},
 		}
@@ -649,14 +921,14 @@ func TestRat_ArithmeticOverflowDetection(t *testing.T) {
 		overflowCases := []overflowTestCase{
 			{
 				name:     "numerator overflow in cross multiplication",
-				receiver: NewRat(math.MaxInt64, 1),
-				other:    NewRat(1, 2), // MaxInt64 * 2 should overflow
+				receiver: New(math.MaxInt64, 1),
+				other:    New(1, 2), // MaxInt64 * 2 should overflow
 				desc:     "numerator cross multiplication overflow",
 			},
 			{
 				name:     "denominator overflow in cross multiplication",
-				receiver: NewRat(1, math.MaxUint64),
-				other:    NewRat(2, 1), // MaxUint64 * 2 should overflow
+				receiver: New(1, math.MaxUint64),
+				other:    New(2, 1), // MaxUint64 * 2 should overflow
 				desc:     "denominator cross multiplication overflow",
 			},
 		}
@@ -666,8 +938,8 @@ func TestRat_ArithmeticOverflowDetection(t *testing.T) {
 
 // TestRat_Div_DivisionByZero tests division by zero
 func TestRat_Div_DivisionByZero(t *testing.T) {
-	r := NewRat(3, 4)
-	r.Div(NewRat(0, 1)) // division by zero
+	r := New(3, 4)
+	r.Div(New(0, 1)) // division by zero
 	assert.True(t, r.IsInvalid(), "division by zero should result in invalid state")
 }
 
@@ -677,16 +949,16 @@ func TestRat_ImmutableOperations(t *testing.T) {
 		cases := []arithmeticTestCase{
 			{
 				name:      "positive fractions",
-				receiver:  NewRat(1, 2), // 1/2
-				other:     NewRat(1, 3), // 1/3
-				wantNum:   5,            // 1/2 + 1/3 = 5/6
+				receiver:  New(1, 2), // 1/2
+				other:     New(1, 3), // 1/3
+				wantNum:   5,         // 1/2 + 1/3 = 5/6
 				wantDenom: 6,
 			},
 			{
 				name:      "add zero",
-				receiver:  NewRat(3, 4), // 3/4
-				other:     NewRat(0, 1), // 0
-				wantNum:   3,            // 3/4 + 0 = 3/4
+				receiver:  New(3, 4), // 3/4
+				other:     New(0, 1), // 0
+				wantNum:   3,         // 3/4 + 0 = 3/4
 				wantDenom: 4,
 			},
 		}
@@ -697,9 +969,9 @@ func TestRat_ImmutableOperations(t *testing.T) {
 		cases := []arithmeticTestCase{
 			{
 				name:      "positive fractions",
-				receiver:  NewRat(3, 4), // 3/4
-				other:     NewRat(1, 4), // 1/4
-				wantNum:   2,            // 3/4 - 1/4 = 2/4 (no auto-reduction)
+				receiver:  New(3, 4), // 3/4
+				other:     New(1, 4), // 1/4
+				wantNum:   2,         // 3/4 - 1/4 = 2/4 (no auto-reduction)
 				wantDenom: 4,
 			},
 		}
@@ -710,9 +982,9 @@ func TestRat_ImmutableOperations(t *testing.T) {
 		cases := []arithmeticTestCase{
 			{
 				name:      "positive fractions",
-				receiver:  NewRat(2, 3), // 2/3
-				other:     NewRat(3, 4), // 3/4
-				wantNum:   6,            // 2/3 * 3/4 = 6/12 (no auto-reduction)
+				receiver:  New(2, 3), // 2/3
+				other:     New(3, 4), // 3/4
+				wantNum:   6,         // 2/3 * 3/4 = 6/12 (no auto-reduction)
 				wantDenom: 12,
 			},
 		}
@@ -723,9 +995,9 @@ func TestRat_ImmutableOperations(t *testing.T) {
 		cases := []arithmeticTestCase{
 			{
 				name:      "positive fractions",
-				receiver:  NewRat(2, 3), // 2/3
-				other:     NewRat(3, 4), // 3/4
-				wantNum:   8,            // 2/3 ÷ 3/4 = 8/9
+				receiver:  New(2, 3), // 2/3
+				other:     New(3, 4), // 3/4
+				wantNum:   8,         // 2/3 ÷ 3/4 = 8/9
 				wantDenom: 9,
 			},
 		}
@@ -740,11 +1012,11 @@ func TestRat_Equal(t *testing.T) {
 		a, b     Rat
 		expected bool
 	}{
-		{"equal fractions", NewRat(1, 2), NewRat(1, 2), true},
-		{"equal reduced", NewRat(2, 4), NewRat(1, 2), true},
-		{"different fractions", NewRat(1, 2), NewRat(1, 3), false},
-		{"zero equal", NewRat(0, 1), NewRat(0, 5), true},
-		{"invalid equal", NewRat(1, 0), NewRat(2, 0), false}, // invalid numbers are not equal
+		{"equal fractions", New(1, 2), New(1, 2), true},
+		{"equal reduced", New(2, 4), New(1, 2), true},
+		{"different fractions", New(1, 2), New(1, 3), false},
+		{"zero equal", New(0, 1), New(0, 5), true},
+		{"invalid equal", New(1, 0), New(2, 0), false}, // invalid numbers are not equal
 	}
 
 	for _, tt := range tests {
@@ -761,11 +1033,11 @@ func TestRat_Less(t *testing.T) {
 		a, b     Rat
 		expected bool
 	}{
-		{"1/2 < 3/4", NewRat(1, 2), NewRat(3, 4), true},
-		{"3/4 < 1/2", NewRat(3, 4), NewRat(1, 2), false},
-		{"equal", NewRat(1, 2), NewRat(2, 4), false},
-		{"negative", NewRat(-1, 2), NewRat(1, 2), true},
-		{"invalid", NewRat(1, 0), NewRat(1, 2), false}, // invalid numbers always return false
+		{"1/2 < 3/4", New(1, 2), New(3, 4), true},
+		{"3/4 < 1/2", New(3, 4), New(1, 2), false},
+		{"equal", New(1, 2), New(2, 4), false},
+		{"negative", New(-1, 2), New(1, 2), true},
+		{"invalid", New(1, 0), New(1, 2), false}, // invalid numbers always return false
 	}
 
 	for _, tt := range tests {
@@ -785,8 +1057,8 @@ func TestRat_Less_OverflowBug(t *testing.T) {
 	// Cross multiplication: (MaxInt64-1) * MaxUint64 vs MaxInt64 * MaxUint64
 	// Both will overflow, current implementation returns false (WRONG!)
 
-	a := NewRat(math.MaxInt64-1, math.MaxUint64)
-	b := NewRat(math.MaxInt64, math.MaxUint64)
+	a := New(math.MaxInt64-1, math.MaxUint64)
+	b := New(math.MaxInt64, math.MaxUint64)
 
 	result := a.Less(b)
 	// Current implementation returns false due to overflow, but correct answer is true
@@ -810,26 +1082,26 @@ func TestRat_Less_OverflowSafe(t *testing.T) {
 	}{
 		{
 			name:     "overflow case that should return true",
-			a:        NewRat(math.MaxInt64-1, math.MaxUint64),
-			b:        NewRat(math.MaxInt64, math.MaxUint64),
+			a:        New(math.MaxInt64-1, math.MaxUint64),
+			b:        New(math.MaxInt64, math.MaxUint64),
 			expected: true, // (MaxInt64-1)/MaxUint64 < MaxInt64/MaxUint64
 		},
 		{
 			name:     "overflow case that should return false",
-			a:        NewRat(math.MaxInt64, math.MaxUint64),
-			b:        NewRat(math.MaxInt64-1, math.MaxUint64),
+			a:        New(math.MaxInt64, math.MaxUint64),
+			b:        New(math.MaxInt64-1, math.MaxUint64),
 			expected: false, // MaxInt64/MaxUint64 > (MaxInt64-1)/MaxUint64
 		},
 		{
 			name:     "large positive vs small positive with overflow",
-			a:        NewRat(math.MaxInt64, 1),
-			b:        NewRat(1, math.MaxUint64),
+			a:        New(math.MaxInt64, 1),
+			b:        New(1, math.MaxUint64),
 			expected: false, // MaxInt64/1 > 1/MaxUint64
 		},
 		{
 			name:     "small positive vs large positive with overflow",
-			a:        NewRat(1, math.MaxUint64),
-			b:        NewRat(math.MaxInt64, 1),
+			a:        New(1, math.MaxUint64),
+			b:        New(math.MaxInt64, 1),
 			expected: true, // 1/MaxUint64 < MaxInt64/1
 		},
 	}
@@ -860,8 +1132,8 @@ func TestRat_Equal_OverflowBug(t *testing.T) {
 	// Let's try: 1000000000000000000 / 2000000000000000000 == 500000000000000000 / 1000000000000000000
 	// Both equal 0.5, but cross-multiplication will be very large
 
-	a := NewRat(1000000000000000000, 2000000000000000000)
-	b := NewRat(500000000000000000, 1000000000000000000)
+	a := New(1000000000000000000, 2000000000000000000)
+	b := New(500000000000000000, 1000000000000000000)
 
 	// These fractions are mathematically equal (both = 0.5):
 	// 1000000000000000000 / 2000000000000000000 = 500000000000000000 / 1000000000000000000
@@ -879,8 +1151,8 @@ func TestRat_Equal_OverflowBug(t *testing.T) {
 	// These should be equal
 
 	// Let's test with simpler numbers first
-	c := NewRat(1, 2) // 1/2
-	d := NewRat(2, 4) // 2/4 = 1/2
+	c := New(1, 2) // 1/2
+	d := New(2, 4) // 2/4 = 1/2
 	simpleResult := c.Equal(d)
 	t.Logf("Simple test: 1/2 == 2/4 = %v", simpleResult)
 
@@ -899,26 +1171,26 @@ func TestRat_Equal_OverflowSafe(t *testing.T) {
 	}{
 		{
 			name:     "equal fractions with potential overflow",
-			a:        NewRat(1000000000000000000, 2000000000000000000),
-			b:        NewRat(500000000000000000, 1000000000000000000),
+			a:        New(1000000000000000000, 2000000000000000000),
+			b:        New(500000000000000000, 1000000000000000000),
 			expected: true, // Both equal 0.5, cross-multiplication overflows
 		},
 		{
 			name:     "unequal fractions with potential overflow",
-			a:        NewRat(1000000000000000000, 2000000000000000000),
-			b:        NewRat(math.MaxInt64-1, math.MaxUint64),
+			a:        New(1000000000000000000, 2000000000000000000),
+			b:        New(math.MaxInt64-1, math.MaxUint64),
 			expected: false, // 0.5 != (MaxInt64-1)/MaxUint64
 		},
 		{
 			name:     "large equal integers",
-			a:        NewRat(math.MaxInt64, 1),
-			b:        NewRat(math.MaxInt64, 1),
+			a:        New(math.MaxInt64, 1),
+			b:        New(math.MaxInt64, 1),
 			expected: true,
 		},
 		{
 			name:     "large unequal integers",
-			a:        NewRat(math.MaxInt64, 1),
-			b:        NewRat(math.MaxInt64-1, 1),
+			a:        New(math.MaxInt64, 1),
+			b:        New(math.MaxInt64-1, 1),
 			expected: false,
 		},
 	}
@@ -940,20 +1212,20 @@ func TestRat_Compare_OverflowSafe(t *testing.T) {
 	}{
 		{
 			name:     "equal with overflow",
-			a:        NewRat(1000000000000000000, 2000000000000000000),
-			b:        NewRat(500000000000000000, 1000000000000000000),
+			a:        New(1000000000000000000, 2000000000000000000),
+			b:        New(500000000000000000, 1000000000000000000),
 			expected: 0, // Both equal 0.5
 		},
 		{
 			name:     "less than with overflow",
-			a:        NewRat(math.MaxInt64-1, math.MaxUint64),
-			b:        NewRat(math.MaxInt64, math.MaxUint64),
+			a:        New(math.MaxInt64-1, math.MaxUint64),
+			b:        New(math.MaxInt64, math.MaxUint64),
 			expected: -1, // (MaxInt64-1)/MaxUint64 < MaxInt64/MaxUint64
 		},
 		{
 			name:     "greater than with overflow",
-			a:        NewRat(math.MaxInt64, math.MaxUint64),
-			b:        NewRat(math.MaxInt64-1, math.MaxUint64),
+			a:        New(math.MaxInt64, math.MaxUint64),
+			b:        New(math.MaxInt64-1, math.MaxUint64),
 			expected: 1, // MaxInt64/MaxUint64 > (MaxInt64-1)/MaxUint64
 		},
 	}
@@ -1066,10 +1338,10 @@ func TestRat_Compare(t *testing.T) {
 		a, b     Rat
 		expected int
 	}{
-		{"1/2 vs 3/4", NewRat(1, 2), NewRat(3, 4), -1},
-		{"3/4 vs 1/2", NewRat(3, 4), NewRat(1, 2), 1},
-		{"equal", NewRat(1, 2), NewRat(2, 4), 0},
-		{"invalid", NewRat(1, 0), NewRat(1, 2), 0}, // invalid numbers return 0
+		{"1/2 vs 3/4", New(1, 2), New(3, 4), -1},
+		{"3/4 vs 1/2", New(3, 4), New(1, 2), 1},
+		{"equal", New(1, 2), New(2, 4), 0},
+		{"invalid", New(1, 0), New(1, 2), 0}, // invalid numbers return 0
 	}
 
 	for _, tt := range tests {
@@ -1086,11 +1358,11 @@ func TestRat_String(t *testing.T) {
 		rat      Rat
 		expected string
 	}{
-		{"positive fraction", NewRat(3, 4), "3/4"},
-		{"negative fraction", NewRat(-5, 7), "-5/7"},
-		{"integer", NewRat(42, 1), "42"},
-		{"zero", NewRat(0, 1), "0"},
-		{"invalid", NewRat(1, 0), "invalid"},
+		{"positive fraction", New(3, 4), "3/4"},
+		{"negative fraction", New(-5, 7), "-5/7"},
+		{"integer", New(42, 1), "42"},
+		{"zero", New(0, 1), "0"},
+		{"invalid", New(1, 0), "invalid"},
 	}
 
 	for _, tt := range tests {
@@ -1103,21 +1375,21 @@ func TestRat_String(t *testing.T) {
 // TestRat_UtilityMethods tests utility methods
 func TestRat_UtilityMethods(t *testing.T) {
 	// Numerator, Denominator
-	r := NewRat(3, 4)
+	r := New(3, 4)
 	assert.Equal(t, int64(3), r.Numerator())
 	assert.Equal(t, uint64(4), r.Denominator())
 
 	// Sign
-	assert.Equal(t, 1, NewRat(3, 4).Sign())
-	assert.Equal(t, -1, NewRat(-3, 4).Sign())
-	assert.Equal(t, 0, NewRat(0, 1).Sign())
-	assert.Equal(t, 0, NewRat(1, 0).Sign()) // invalid
+	assert.Equal(t, 1, New(3, 4).Sign())
+	assert.Equal(t, -1, New(-3, 4).Sign())
+	assert.Equal(t, 0, New(0, 1).Sign())
+	assert.Equal(t, 0, New(1, 0).Sign()) // invalid
 
 	// IsZero, IsOne
-	assert.True(t, NewRat(0, 1).IsZero())
-	assert.False(t, NewRat(1, 2).IsZero())
-	assert.True(t, NewRat(1, 1).IsOne())
-	assert.False(t, NewRat(2, 1).IsOne())
+	assert.True(t, New(0, 1).IsZero())
+	assert.False(t, New(1, 2).IsZero())
+	assert.True(t, New(1, 1).IsOne())
+	assert.False(t, New(2, 1).IsOne())
 }
 
 // TestRat_Reduce tests mutable reduction to lowest terms
@@ -1130,37 +1402,37 @@ func TestRat_Reduce(t *testing.T) {
 	}{
 		{
 			name:      "already reduced",
-			input:     NewRat(3, 4),
+			input:     New(3, 4),
 			wantNum:   3,
 			wantDenom: 4,
 		},
 		{
 			name:      "reduce simple fraction",
-			input:     NewRat(6, 8),
+			input:     New(6, 8),
 			wantNum:   3,
 			wantDenom: 4,
 		},
 		{
 			name:      "reduce to integer",
-			input:     NewRat(10, 5),
+			input:     New(10, 5),
 			wantNum:   2,
 			wantDenom: 1,
 		},
 		{
 			name:      "reduce negative fraction",
-			input:     NewRat(-12, 18),
+			input:     New(-12, 18),
 			wantNum:   -2,
 			wantDenom: 3,
 		},
 		{
 			name:      "reduce zero",
-			input:     NewRat(0, 15),
+			input:     New(0, 15),
 			wantNum:   0,
 			wantDenom: 1,
 		},
 		{
 			name:      "large numbers",
-			input:     NewRat(1000000, 2000000),
+			input:     New(1000000, 2000000),
 			wantNum:   1,
 			wantDenom: 2,
 		},
@@ -1178,7 +1450,7 @@ func TestRat_Reduce(t *testing.T) {
 
 // TestRat_Reduce_Invalid tests reduction with invalid state
 func TestRat_Reduce_Invalid(t *testing.T) {
-	r := NewRat(6, 0) // invalid
+	r := New(6, 0) // invalid
 	r.Reduce()
 	assert.True(t, r.IsInvalid(), "invalid state should be preserved")
 }
@@ -1193,13 +1465,13 @@ func TestRat_Reduced(t *testing.T) {
 	}{
 		{
 			name:      "reduce fraction",
-			input:     NewRat(6, 8),
+			input:     New(6, 8),
 			wantNum:   3,
 			wantDenom: 4,
 		},
 		{
 			name:      "already reduced",
-			input:     NewRat(5, 7),
+			input:     New(5, 7),
 			wantNum:   5,
 			wantDenom: 7,
 		},
@@ -1223,7 +1495,7 @@ func TestRat_Reduced(t *testing.T) {
 
 // TestRat_Reduced_Invalid tests immutable reduction with invalid state
 func TestRat_Reduced_Invalid(t *testing.T) {
-	original := NewRat(6, 0) // invalid
+	original := New(6, 0) // invalid
 	result := original.Reduced()
 	assert.True(t, result.IsInvalid(), "result should be invalid")
 	assert.True(t, original.IsInvalid(), "original should remain invalid")
@@ -1240,23 +1512,23 @@ func TestRat_Div_NegativeDivisor(t *testing.T) {
 	}{
 		{
 			name:      "divide by negative",
-			receiver:  NewRat(6, 4),  // 6/4 = 3/2 (reduced)
-			other:     NewRat(-2, 3), // -2/3
-			wantNum:   -9,            // 3/2 ÷ (-2/3) = 3/2 * (-3/2) = -9/4
+			receiver:  New(6, 4),  // 6/4 = 3/2 (reduced)
+			other:     New(-2, 3), // -2/3
+			wantNum:   -9,         // 3/2 ÷ (-2/3) = 3/2 * (-3/2) = -9/4
 			wantDenom: 4,
 		},
 		{
 			name:      "divide negative by positive",
-			receiver:  NewRat(-6, 4), // -6/4 = -3/2 (reduced)
-			other:     NewRat(2, 3),  // 2/3
-			wantNum:   -9,            // -3/2 ÷ 2/3 = -3/2 * 3/2 = -9/4
+			receiver:  New(-6, 4), // -6/4 = -3/2 (reduced)
+			other:     New(2, 3),  // 2/3
+			wantNum:   -9,         // -3/2 ÷ 2/3 = -3/2 * 3/2 = -9/4
 			wantDenom: 4,
 		},
 		{
 			name:      "divide negative by negative",
-			receiver:  NewRat(-6, 4), // -6/4 = -3/2 (reduced)
-			other:     NewRat(-2, 3), // -2/3
-			wantNum:   9,             // -3/2 ÷ (-2/3) = -3/2 * (-3/2) = 9/4
+			receiver:  New(-6, 4), // -6/4 = -3/2 (reduced)
+			other:     New(-2, 3), // -2/3
+			wantNum:   9,          // -3/2 ÷ (-2/3) = -3/2 * (-3/2) = 9/4
 			wantDenom: 4,
 		},
 	}
@@ -1275,9 +1547,9 @@ func TestRat_Div_NegativeDivisor(t *testing.T) {
 func TestRat_Div_MinInt64Special(t *testing.T) {
 	// Test the special case where other.numerator == math.MinInt64
 	// This triggers the special handling: otherNum = uint64(math.MaxInt64) + 1
-	r := NewRat(1, 1)                 // 1/1
-	other := NewRat(math.MinInt64, 1) // MinInt64/1
-	r.Div(other)                      // 1/1 ÷ MinInt64/1 = 1/1 * 1/MinInt64 = 1/MinInt64
+	r := New(1, 1)                 // 1/1
+	other := New(math.MinInt64, 1) // MinInt64/1
+	r.Div(other)                   // 1/1 ÷ MinInt64/1 = 1/1 * 1/MinInt64 = 1/MinInt64
 
 	// The result should be 1/MinInt64 with sign change applied
 	// Since MinInt64 is negative, signChange = true, so newNum = -1
@@ -1287,9 +1559,9 @@ func TestRat_Div_MinInt64Special(t *testing.T) {
 
 // TestRat_Div_ZeroResult tests division resulting in zero
 func TestRat_Div_ZeroResult(t *testing.T) {
-	r := NewRat(0, 5)     // 0/5
-	other := NewRat(3, 7) // 3/7
-	r.Div(other)          // 0/5 ÷ 3/7 = 0
+	r := New(0, 5)     // 0/5
+	other := New(3, 7) // 3/7
+	r.Div(other)       // 0/5 ÷ 3/7 = 0
 
 	assert.Equal(t, int64(0), r.numerator, "numerator should be 0")
 	assert.Equal(t, uint64(1), r.denominator, "denominator should be normalized to 1")
@@ -1298,8 +1570,8 @@ func TestRat_Div_ZeroResult(t *testing.T) {
 // TestRat_Compare_ZeroComparison tests comparison when both numerators are zero
 func TestRat_Compare_ZeroComparison(t *testing.T) {
 	// This tests the specific line: if r.numerator == 0 && other.numerator == 0
-	a := NewRat(0, 3) // 0/3
-	b := NewRat(0, 7) // 0/7
+	a := New(0, 3) // 0/3
+	b := New(0, 7) // 0/7
 
 	result := a.Compare(b)
 	assert.Equal(t, 0, result, "0/3 should equal 0/7")
@@ -1391,24 +1663,24 @@ func TestCompareRationalsCrossMul_SignHandling(t *testing.T) {
 func TestRat_AddSub_AdditionalCases(t *testing.T) {
 	t.Run("SameDenominatorOverflow", func(t *testing.T) {
 		// Test overflow with same denominators
-		r1 := NewRat(math.MaxInt64, 5)
-		r1.Add(NewRat(1, 5)) // MaxInt64 + 1 should overflow
+		r1 := New(math.MaxInt64, 5)
+		r1.Add(New(1, 5)) // MaxInt64 + 1 should overflow
 		assert.True(t, r1.IsInvalid(), "addition overflow with same denominator")
 
-		r2 := NewRat(math.MinInt64, 5)
-		r2.Sub(NewRat(1, 5)) // MinInt64 - 1 should overflow
+		r2 := New(math.MinInt64, 5)
+		r2.Sub(New(1, 5)) // MinInt64 - 1 should overflow
 		assert.True(t, r2.IsInvalid(), "subtraction overflow with same denominator")
 	})
 
 	t.Run("ZeroResults", func(t *testing.T) {
 		// Test zero results in various cases
-		r1 := NewRat(3, 7)
-		r1.Add(NewRat(-3, 7)) // 3/7 + (-3/7) = 0
+		r1 := New(3, 7)
+		r1.Add(New(-3, 7)) // 3/7 + (-3/7) = 0
 		assert.Equal(t, int64(0), r1.numerator, "should normalize to 0")
 		assert.Equal(t, uint64(1), r1.denominator, "should normalize denominator to 1")
 
-		r2 := NewRat(1, 3)
-		r2.Add(NewRat(-2, 6)) // 1/3 + (-1/3) = 0
+		r2 := New(1, 3)
+		r2.Add(New(-2, 6)) // 1/3 + (-1/3) = 0
 		assert.Equal(t, int64(0), r2.numerator, "should normalize to 0")
 		assert.Equal(t, uint64(1), r2.denominator, "should normalize denominator to 1")
 	})
