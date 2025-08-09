@@ -595,65 +595,121 @@ func compareRationalsCrossMul(aNum int64, aDenom uint64, cNum int64, cDenom uint
 	return cmpResult
 }
 
-// float64ToRatExact converts a float64 to its exact rational representation.
-// Returns invalid state if conversion would overflow int64/uint64 limits.
+// float64ToRatExact converts a float64 to a rational using IEEE-754 decomposition.
+// It returns the exact rational m * 2^e when it fits into (int64 numerator, uint64 denominator).
+// If exact representation would overflow the type bounds, it returns a best-effort
+// tiny approximation within bounds instead of an invalid value (to minimize precision loss).
 //
-//nolint:mnd // magic numbers are fine here
+//nolint:gocognit,nestif,mnd // complexity and magic constants are acceptable here due to bit-level IEEE-754 handling
 func float64ToRatExact(value float64) Rat {
-	if math.IsNaN(value) {
+	// Reject non-finite
+	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return Rat{}
 	}
-	if value < -9.223372036854775e+18 || value > 9.223372036854775e+18 {
-		return Rat{}
-	}
-	if value > -2.168404344971009e-19 && value < 2.168404344971009e-19 {
-		return Rat{}
+	// Zero (incl. -0) handled here for completeness
+	if value == 0 {
+		return Rat{numerator: 0, denominator: 1}
 	}
 
-	// Decompose float64
-	fBits := math.Float64bits(value)
-	isNegative := fBits&(1<<63) != 0
-	exp := int64((fBits>>52)&(1<<11-1)) - 1023
-	mantissa := (fBits & (1<<52 - 1)) | 1<<52 // Since we discarded tiny values, it'll never be denormalized.
+	bits64 := math.Float64bits(value)
+	neg := (bits64 >> 63) != 0
+	expBits := int((bits64 >> 52) & 0x7FF)
+	frac := bits64 & ((uint64(1) << 52) - 1)
 
-	// Amount of times to shift the mantissa to the right to compensate for the exponent
-	shift := 52 - exp
-
-	// Reduce shift and mantissa as far as we can
-	for mantissa&1 == 0 && shift > 0 {
-		mantissa >>= 1
-		shift--
-	}
-
-	// Choose whether to shift the numerator or denominator
-	var shiftN, shiftD int64 = 0, 0
-	if shift > 0 {
-		shiftD = shift
+	var mant uint64
+	var e int // power of two exponent in value = mant * 2^e
+	if expBits == 0 {
+		// Subnormal: no implicit 1, unbiased exp is 1-1023, but value = frac * 2^-1074
+		// frac is non-zero here because value != 0
+		mant = frac
+		e = -1074
 	} else {
-		shiftN = shift
+		// Normalized: implicit leading 1
+		mant = (uint64(1) << 52) | frac
+		e = expBits - 1023 - 52
 	}
 
-	// Shift that require larger shifts that what an int64 can hold, or larger than the mantissa itself, will be
-	// approximated splitting it between the numerator and denominator.
-	if shiftD > 62 {
-		shiftD = 62
-		shiftN = shift - 62
-	} else if shiftN > 52 {
-		shiftN = 52
-		shiftD = shift - 52
+	// Reduce common factors of 2 when e < 0 to keep denominator smaller
+	if e < 0 {
+		// Remove up to -e trailing zeros from mant
+		if tz := bits.TrailingZeros64(mant); tz > 0 {
+			if tz > -e {
+				mant >>= uint(-e)
+				e = 0
+			} else {
+				mant >>= uint(tz)
+				e += tz
+			}
+		}
 	}
 
-	numerator, denominator := int64(mantissa), int64(1)
-	denominator <<= shiftD
-	if shiftN < 0 {
-		numerator <<= -shiftN
+	// Try to construct exact value; if too large, move some exponent into denominator (power-of-two)
+	if e >= 0 {
+		absLimit := uint64(math.MaxInt64)
+		limitBits := 63
+		if neg {
+			absLimit = uint64(math.MaxInt64) + 1 // allow -2^63
+			limitBits = 64
+		}
+
+		mantBits := bits.Len64(mant)
+		// Fast exact path: mant << e must fit absLimit
+		if e < 64 && mant <= (absLimit>>uint(e)) {
+			n := int64(mant << uint(e))
+			if neg {
+				n = -n
+			}
+			return Rat{numerator: n, denominator: 1}
+		}
+
+		// Need to offload some exponent to denominator 2^d so numerator fits
+		maxShiftAllowed := max(limitBits-mantBits, 0)
+		neededDenPow := max(e-maxShiftAllowed, 0)
+		if neededDenPow > 63 {
+			// Even with denom capped at 2^63, numerator still too large → invalid (overflow)
+			return Rat{}
+		}
+		newShift := e - neededDenPow
+		// Now mant << newShift must fit
+		if newShift >= 64 || mant > (absLimit>>uint(newShift)) {
+			return Rat{}
+		}
+		n := int64(mant << uint(newShift))
+		if neg {
+			n = -n
+		}
+		den := uint64(1) << uint(neededDenPow)
+		return Rat{numerator: n, denominator: den}
+	}
+
+	// e < 0: choose denominator d = min(-e, 63) and compute nearest numerator by rounding
+	denPow := min(-e, 63)
+	shiftUp := e + denPow // <= 0
+	var n64 uint64
+	if shiftUp < 0 {
+		shift := uint(-shiftUp)
+		if shift >= 64 {
+			n64 = 0
+		} else {
+			base := mant >> shift
+			// Round-to-nearest-even on the truncated bits
+			mask := (uint64(1) << shift) - 1
+			rem := mant & mask
+			half := uint64(1) << (shift - 1)
+			if rem > half || (rem == half && (base&1) == 1) {
+				base++
+			}
+			n64 = base
+		}
 	} else {
-		numerator >>= shiftN
+		// shiftUp == 0 → exact
+		n64 = mant
 	}
-
-	if isNegative {
-		numerator *= -1
+	// n64 now fits well within int64 range (<= mant)
+	n := int64(n64)
+	if neg {
+		n = -n
 	}
-
-	return Rat{numerator: numerator, denominator: uint64(denominator)}
+	den := uint64(1) << uint(denPow)
+	return Rat{numerator: n, denominator: den}
 }
