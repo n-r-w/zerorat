@@ -1,4 +1,3 @@
-//nolint:gosec // false positive (no change needed)
 package zerorat
 
 import (
@@ -18,8 +17,6 @@ type Rat struct {
 // New creates a new rational number with given numerator and denominator.
 // Returns a value, not a pointer.
 func New(numerator int64, denominator uint64) (r Rat) {
-	defer r.Reduce()
-
 	// If denominator is 0, return invalid state
 	if denominator == 0 {
 		return Rat{numerator: numerator, denominator: 0}
@@ -30,12 +27,14 @@ func New(numerator int64, denominator uint64) (r Rat) {
 		return Rat{numerator: 0, denominator: 1}
 	}
 
-	// Return the rational number as-is
-	return Rat{numerator: numerator, denominator: denominator}
+	// Construct and explicitly reduce (hot path without defer)
+	r = Rat{numerator: numerator, denominator: denominator}
+	r.Reduce()
+	return r
 }
 
 // NewFromInt creates a rational number from an integer.
-// Equivalent to NewRat(value, 1).
+// Equivalent to New(value, 1).
 func NewFromInt(value int64) Rat {
 	return Rat{numerator: value, denominator: 1}
 }
@@ -44,8 +43,6 @@ func NewFromInt(value int64) Rat {
 // Returns invalid state (denominator = 0) for special values: NaN, +Inf, -Inf.
 // Returns invalid state if the conversion would overflow int64/uint64 limits.
 func NewFromFloat64(value float64) (r Rat) {
-	defer r.Reduce()
-
 	// Handle special cases
 	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return Rat{numerator: 0, denominator: 0} // invalid state
@@ -56,8 +53,14 @@ func NewFromFloat64(value float64) (r Rat) {
 		return Rat{numerator: 0, denominator: 1}
 	}
 
-	// Use IEEE 754 decomposition for exact conversion
-	return float64ToRatExact(value)
+	// Use IEEE 754 decomposition for exact conversion.
+	// Note: NewFromFloat64 must invalidate on overflow; float64ToRatExact returns Rat{}
+	// when representation would exceed int64/uint64 bounds.
+	r = float64ToRatExact(value)
+	if r.IsValid() {
+		r.Reduce()
+	}
+	return r
 }
 
 // Zero returns a rational number representing zero (0/1).
@@ -138,20 +141,22 @@ func (r *Rat) addSubCommon(other Rat, isAdd bool) {
 	newDenom := r.denominator * other.denominator
 
 	// Check for numerator calculation overflow
-	// Check a*d overflow
-	if willOverflowInt64Mul(r.numerator, int64(other.denominator)) {
+	// Check a*d overflow and compute safely
+	prod1, ok := mulInt64ByUint64ToInt64(r.numerator, other.denominator)
+	if !ok {
 		r.Invalidate()
 		return
 	}
 
-	// Check c*b overflow
-	if willOverflowInt64Mul(other.numerator, int64(r.denominator)) {
+	// Check c*b overflow and compute safely
+	prod2, ok := mulInt64ByUint64ToInt64(other.numerator, r.denominator)
+	if !ok {
 		r.Invalidate()
 		return
 	}
 
-	term1 := r.numerator * int64(other.denominator)
-	term2 := other.numerator * int64(r.denominator)
+	term1 := prod1
+	term2 := prod2
 
 	var newNum int64
 	var overflowCheck bool
@@ -258,8 +263,9 @@ func (r *Rat) Div(other Rat) {
 	// Get absolute value of other.numerator for unsigned arithmetic
 	otherNumAbs := absInt64ToUint64(other.numerator)
 
-	// Check for numerator * denominator overflow
-	if willOverflowInt64Mul(r.numerator, int64(other.denominator)) {
+	// Check for numerator * denominator overflow and compute safely
+	prodNum, ok := mulInt64ByUint64ToInt64(r.numerator, other.denominator)
+	if !ok {
 		r.Invalidate()
 		return
 	}
@@ -270,11 +276,16 @@ func (r *Rat) Div(other Rat) {
 		return
 	}
 
-	newNum := r.numerator * int64(other.denominator)
+	newNum := prodNum
 	newDenom := r.denominator * otherNumAbs
 
 	// Apply sign: if other.numerator was negative, negate result
 	if other.numerator < 0 {
+		if newNum == math.MinInt64 {
+			// cannot negate MinInt64 safely; treat as overflow
+			r.Invalidate()
+			return
+		}
 		newNum = -newNum
 	}
 
@@ -438,7 +449,16 @@ func (r *Rat) Reduce() {
 	// Find GCD and reduce
 	gcd := gcdInt64Uint64(r.numerator, r.denominator)
 	if gcd > 1 {
-		r.numerator /= int64(gcd)
+		// Reduce numerator using unsigned magnitude to avoid unsafe casts
+		absNum := absInt64ToUint64(r.numerator)
+		absNum /= gcd
+		newNum, ok := uint64ToInt64WithSign(absNum, r.numerator < 0)
+		if !ok {
+			// Should not happen, but be safe: mark invalid
+			r.Invalidate()
+			return
+		}
+		r.numerator = newNum
 		r.denominator /= gcd
 	}
 }
@@ -485,6 +505,56 @@ func willOverflowInt64Mul(a, b int64) bool {
 	// Negative result: must fit in [MinInt64, -1]
 	// MaxInt64 + 1 = 9223372036854775808 (absolute value of MinInt64)
 	return hi != 0 || lo > 9223372036854775808
+}
+
+// mulInt64ByUint64ToInt64 multiplies an int64 by a uint64 and returns the int64 result if it fits.
+// The function performs 128-bit multiplication on absolute values and then reapplies the sign safely.
+// Returns (0, false) if the product would overflow int64.
+func mulInt64ByUint64ToInt64(a int64, b uint64) (int64, bool) {
+	if a == 0 || b == 0 {
+		return 0, true
+	}
+	neg := a < 0
+	aAbs := absInt64ToUint64(a)
+	hi, lo := bits.Mul64(aAbs, b)
+	if hi != 0 {
+		// product >= 2^64, definitely exceeds int64 range
+		return 0, false
+	}
+	if neg {
+		limit := uint64(math.MaxInt64) + 1 // allow MinInt64 magnitude
+		if lo > limit {
+			return 0, false
+		}
+		if lo == limit {
+			return math.MinInt64, true
+		}
+		return -int64(lo), true
+	}
+	// positive result
+	if lo > uint64(math.MaxInt64) {
+		return 0, false
+	}
+	return int64(lo), true
+}
+
+// uint64ToInt64WithSign converts an unsigned magnitude to a signed int64, given desired sign.
+// Returns ok=false if magnitude cannot be represented in int64 with the given sign.
+func uint64ToInt64WithSign(u uint64, neg bool) (int64, bool) {
+	if neg {
+		limit := uint64(math.MaxInt64) + 1
+		if u > limit {
+			return 0, false
+		}
+		if u == limit {
+			return math.MinInt64, true
+		}
+		return -int64(u), true
+	}
+	if u > uint64(math.MaxInt64) {
+		return 0, false
+	}
+	return int64(u), true
 }
 
 // willOverflowInt64Add checks if adding two int64 values would overflow.
@@ -597,8 +667,7 @@ func compareRationalsCrossMul(aNum int64, aDenom uint64, cNum int64, cDenom uint
 
 // float64ToRatExact converts a float64 to a rational using IEEE-754 decomposition.
 // It returns the exact rational m * 2^e when it fits into (int64 numerator, uint64 denominator).
-// If exact representation would overflow the type bounds, it returns a best-effort
-// tiny approximation within bounds instead of an invalid value (to minimize precision loss).
+// If exact representation would overflow the type bounds, it returns an invalid Rat (denominator=0).
 //
 //nolint:gocognit,nestif,mnd // complexity and magic constants are acceptable here due to bit-level IEEE-754 handling
 func float64ToRatExact(value float64) Rat {
@@ -613,7 +682,8 @@ func float64ToRatExact(value float64) Rat {
 
 	bits64 := math.Float64bits(value)
 	neg := (bits64 >> 63) != 0
-	expBits := int((bits64 >> 52) & 0x7FF)
+	// exponent bits are 11-bit value in [0, 2047]
+	expBits := int((bits64 >> 52) & 0x7FF) //nolint:gosec // bounded to 11 bits, safe int conversion
 	frac := bits64 & ((uint64(1) << 52) - 1)
 
 	var mant uint64
@@ -654,12 +724,16 @@ func float64ToRatExact(value float64) Rat {
 
 		mantBits := bits.Len64(mant)
 		// Fast exact path: mant << e must fit absLimit
-		if e < 64 && mant <= (absLimit>>uint(e)) {
-			n := int64(mant << uint(e))
-			if neg {
-				n = -n
+		if e >= 0 && e < 64 {
+			shifted := mant << uint(e)
+			if mant <= (absLimit >> uint(e)) {
+				// shifted is <= absLimit by the guard above, safe to cast
+				n := int64(shifted) //nolint:gosec // guarded by absLimit check above
+				if neg {
+					n = -n
+				}
+				return Rat{numerator: n, denominator: 1}
 			}
-			return Rat{numerator: n, denominator: 1}
 		}
 
 		// Need to offload some exponent to denominator 2^d so numerator fits
@@ -671,14 +745,17 @@ func float64ToRatExact(value float64) Rat {
 		}
 		newShift := e - neededDenPow
 		// Now mant << newShift must fit
-		if newShift >= 64 || mant > (absLimit>>uint(newShift)) {
+		if newShift < 0 || newShift >= 64 || mant > (absLimit>>uint(newShift)) {
 			return Rat{}
 		}
-		n := int64(mant << uint(newShift))
+		shifted := mant << uint(newShift)
+		// shifted is <= absLimit by the guard above, safe to cast
+		n := int64(shifted) //nolint:gosec // guarded by absLimit check above
 		if neg {
 			n = -n
 		}
-		den := uint64(1) << uint(neededDenPow)
+		// neededDenPow in [0,63] by guard above; safe shift
+		den := uint64(1) << uint(neededDenPow) //nolint:gosec // neededDenPow in [0,63] by guard above, safe shift
 		return Rat{numerator: n, denominator: den}
 	}
 
@@ -706,10 +783,12 @@ func float64ToRatExact(value float64) Rat {
 		n64 = mant
 	}
 	// n64 now fits well within int64 range (<= mant)
-	n := int64(n64)
+	// n64 is derived from mant which fits in int64 after rounding; safe cast
+	n := int64(n64) //nolint:gosec // derived from mant and bounded, safe cast
 	if neg {
 		n = -n
 	}
-	den := uint64(1) << uint(denPow)
+	// denPow is in [0,63]; safe shift
+	den := uint64(1) << uint(denPow) //nolint:gosec // denPow is bounded in [0,63], safe shift
 	return Rat{numerator: n, denominator: den}
 }

@@ -26,8 +26,8 @@ go get github.com/n-r-w/zerorat@latest
 
 ```go
 // Construction
-a := NewRat(3, 4)        // 3/4
-b := NewRatFromInt(5)    // 5/1
+a := New(3, 4)        // 3/4
+b := NewFromInt(5)    // 5/1
 
 // Mutable operations (results not auto-reduced)
 a.Add(b)                 // a = 3/4 + 5/1 = (3*1 + 5*4)/(4*1) = 23/4

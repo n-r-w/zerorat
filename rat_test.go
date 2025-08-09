@@ -473,10 +473,10 @@ func TestNewRatFromFloat64_PrecisionLoss(t *testing.T) {
 // TestNewRatFromFloat64_EdgeCases tests edge cases and boundary conditions
 func TestNewRatFromFloat64_EdgeCases(t *testing.T) {
 	tests := []struct {
-		name         string
-		value        float64
-		description  string
-		mayBeInvalid bool // true if overflow to invalid state is acceptable
+		name            string
+		value           float64
+		description     string
+		shouldBeInvalid bool // true if overflow to invalid state is expected
 	}{
 		{
 			name:        "max safe integer",
@@ -494,10 +494,10 @@ func TestNewRatFromFloat64_EdgeCases(t *testing.T) {
 			description: "should handle smallest positive normal float64",
 		},
 		{
-			name:         "largest finite",
-			value:        math.MaxFloat64,
-			description:  "largest finite float64 may overflow to invalid state",
-			mayBeInvalid: true, // This is likely to overflow int64/uint64 limits
+			name:            "largest finite",
+			value:           math.MaxFloat64,
+			description:     "largest finite float64 should overflow and become invalid",
+			shouldBeInvalid: true, // This must overflow int64/uint64 representable bounds
 		},
 		{
 			name:        "negative zero",
@@ -510,12 +510,10 @@ func TestNewRatFromFloat64_EdgeCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := NewFromFloat64(tt.value)
 
-			if tt.mayBeInvalid {
-				// For values that may overflow, either valid or invalid is acceptable
-				t.Logf("%s result: valid=%v, num=%d, denom=%d", tt.name, r.IsValid(), r.numerator, r.denominator)
-				if r.IsInvalid() {
-					assert.Equal(t, uint64(0), r.denominator, "invalid rational should have denominator = 0")
-				}
+			if tt.shouldBeInvalid {
+				// For values that must overflow, the result should be invalid
+				assert.True(t, r.IsInvalid(), "%s should be invalid due to overflow", tt.name)
+				assert.Equal(t, uint64(0), r.denominator, "invalid rational should have denominator = 0")
 				return
 			}
 
