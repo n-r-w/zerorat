@@ -1122,3 +1122,174 @@ func TestMoneyDivScalar(t *testing.T) {
 		assert.True(t, m.IsValid())
 	})
 }
+
+// TestSum tests Sum and SumErr varargs operations
+func TestSum(t *testing.T) {
+	t.Run("SumErr - empty slice", func(t *testing.T) {
+		result, err := SumErr()
+
+		require.NoError(t, err)
+		assert.True(t, result.IsInvalid(), "Sum of empty slice should return invalid Money")
+		assert.Empty(t, result.Currency(), "Empty sum should have empty currency")
+	})
+
+	t.Run("SumErr - single money", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+
+		result, err := SumErr(m1)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsValid())
+		assert.Equal(t, "USD", result.Currency())
+		assert.True(t, result.Equal(m1), "Sum of single Money should equal itself")
+	})
+
+	t.Run("SumErr - two moneys same currency", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100) // $1.00
+		m2 := NewMoneyInt("USD", 50)  // $0.50
+
+		result, err := SumErr(m1, m2)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsValid())
+		assert.Equal(t, "USD", result.Currency())
+		expected := NewMoneyInt("USD", 150) // $1.50
+		assert.True(t, result.Equal(expected))
+	})
+
+	t.Run("SumErr - multiple moneys same currency", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100) // $1.00
+		m2 := NewMoneyInt("USD", 50)  // $0.50
+		m3 := NewMoneyInt("USD", 25)  // $0.25
+		m4 := NewMoneyInt("USD", 75)  // $0.75
+
+		result, err := SumErr(m1, m2, m3, m4)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsValid())
+		assert.Equal(t, "USD", result.Currency())
+		expected := NewMoneyInt("USD", 250) // $2.50
+		assert.True(t, result.Equal(expected))
+	})
+
+	t.Run("SumErr - currency mismatch", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("EUR", 50) // different currency
+
+		result, err := SumErr(m1, m2)
+
+		require.Error(t, err)
+		assert.Equal(t, ErrMoneyCurrencyMismatch, err)
+		assert.True(t, result.IsInvalid(), "Result should be invalid on currency mismatch")
+	})
+
+	t.Run("SumErr - invalid money in first position", func(t *testing.T) {
+		m1 := NewMoneyInt("", 100) // invalid
+		m2 := NewMoneyInt("USD", 50)
+
+		result, err := SumErr(m1, m2)
+
+		require.Error(t, err)
+		assert.Equal(t, ErrMoneyInvalid, err)
+		assert.True(t, result.IsInvalid(), "Result should be invalid when first operand is invalid")
+	})
+
+	t.Run("SumErr - invalid money in middle", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("", 50) // invalid
+		m3 := NewMoneyInt("USD", 25)
+
+		result, err := SumErr(m1, m2, m3)
+
+		require.Error(t, err)
+		assert.Equal(t, ErrMoneyInvalid, err)
+		assert.True(t, result.IsInvalid(), "Result should be invalid when any operand is invalid")
+	})
+
+	t.Run("SumErr - with fractions", func(t *testing.T) {
+		m1 := NewMoneyFromFraction(1, 3, "USD") // 1/3
+		m2 := NewMoneyFromFraction(1, 6, "USD") // 1/6
+		m3 := NewMoneyFromFraction(1, 2, "USD") // 1/2
+
+		result, err := SumErr(m1, m2, m3)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsValid())
+		// 1/3 + 1/6 + 1/2 = 2/6 + 1/6 + 3/6 = 6/6 = 1
+		expected := NewMoneyInt("USD", 1)
+		assert.True(t, result.Equal(expected))
+	})
+
+	t.Run("SumErr - with negative values", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100) // $1.00
+		m2 := NewMoneyInt("USD", -30) // -$0.30
+		m3 := NewMoneyInt("USD", -20) // -$0.20
+
+		result, err := SumErr(m1, m2, m3)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsValid())
+		expected := NewMoneyInt("USD", 50) // $0.50
+		assert.True(t, result.Equal(expected))
+	})
+
+	t.Run("SumErr - with zero values", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := ZeroMoney("USD")
+		m3 := NewMoneyInt("USD", 50)
+
+		result, err := SumErr(m1, m2, m3)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsValid())
+		expected := NewMoneyInt("USD", 150)
+		assert.True(t, result.Equal(expected))
+	})
+
+	t.Run("Sum - empty slice", func(t *testing.T) {
+		result := Sum()
+
+		assert.True(t, result.IsInvalid(), "Sum of empty slice should return invalid Money")
+	})
+
+	t.Run("Sum - single money", func(t *testing.T) {
+		m1 := NewMoneyInt("EUR", 200)
+
+		result := Sum(m1)
+
+		assert.True(t, result.IsValid())
+		assert.Equal(t, "EUR", result.Currency())
+		assert.True(t, result.Equal(m1))
+	})
+
+	t.Run("Sum - multiple moneys success", func(t *testing.T) {
+		m1 := NewMoneyInt("GBP", 100)
+		m2 := NewMoneyInt("GBP", 200)
+		m3 := NewMoneyInt("GBP", 300)
+
+		result := Sum(m1, m2, m3)
+
+		assert.True(t, result.IsValid())
+		assert.Equal(t, "GBP", result.Currency())
+		expected := NewMoneyInt("GBP", 600)
+		assert.True(t, result.Equal(expected))
+	})
+
+	t.Run("Sum - currency mismatch returns invalid", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("CAD", 50) // different currency
+
+		result := Sum(m1, m2)
+
+		assert.True(t, result.IsInvalid(), "Sum should return invalid Money on currency mismatch")
+	})
+
+	t.Run("Sum - invalid money returns invalid", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("", 50) // invalid
+
+		result := Sum(m1, m2)
+
+		assert.True(t, result.IsInvalid(), "Sum should return invalid Money when any operand is invalid")
+	})
+}

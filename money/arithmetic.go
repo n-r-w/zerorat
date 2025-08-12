@@ -550,3 +550,27 @@ func (m Money) DividedFloat(value float64) Money {
 	result, _ := m.DividedFloatErr(value)
 	return result
 }
+
+// Sum returns the sum of multiple Money values (immutable varargs operation).
+func Sum(moneys ...Money) Money {
+	result, _ := SumErr(moneys...)
+	return result
+}
+
+// SumErr returns the sum of multiple Money values (immutable varargs operation).
+func SumErr(moneys ...Money) (Money, error) {
+	if len(moneys) == 0 {
+		return Money{}, nil
+	}
+	if len(moneys) == 1 {
+		return moneys[0], nil
+	}
+
+	result := moneys[0]
+	for i := 1; i < len(moneys); i++ {
+		if err := result.Add(moneys[i]); err != nil {
+			return Money{}, err
+		}
+	}
+	return result, nil
+}
