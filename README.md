@@ -45,6 +45,39 @@ str := a.String()        // "23/4"
 valid := a.IsValid()     // true/false
 ```
 
+## Money package
+
+Currency-aware monetary calculations built on top of ZeroRat. Provides type-safe money operations with automatic currency validation, rounding modes, and formatting support. Ensures operations only occur between compatible currencies while maintaining ZeroRat's zero-allocation performance characteristics.
+
+```go
+import (
+    "github.com/n-r-w/zerorat"
+    "github.com/n-r-w/zerorat/money"
+)
+
+// Construction
+price := money.NewMoneyInt("USD", 1299)        // $12.99 (in cents)
+tax := money.NewMoneyFloat("USD", 0.85)        // $0.85
+discount := money.NewMoney("USD", zerorat.New(15, 100)) // 15% as fraction
+discount1 := money.NewMoneyFromFraction("USD", 20, 100) // 20% as fraction
+
+// Mutable operations (error handling for currency mismatches)
+err := price.Add(tax)                          // price = $13.84
+err = price.PercentInt(10)                     // 10% of price
+
+// Immutable operations
+total := price.Added(tax)                      // returns new Money, price unchanged
+afterDiscount := total.MultipliedFloat(0.85)  // 15% discount
+
+// Currency validation
+usd := money.NewMoneyInt("USD", 100)
+eur := money.NewMoneyInt("EUR", 85)
+err := usd.Add(eur)                           // returns ErrMoneyCurrencyMismatch
+
+// Formatting
+fmt.Println(price.String())                   // "USD 12.99"
+```
+
 ## Performance vs big.Rat
 
 | Operation | ZeroRat | big.Rat | Speedup |

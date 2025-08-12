@@ -7,6 +7,18 @@ import (
 	"strconv"
 )
 
+// RoundType defines rounding strategies for rounding rationals to integers.
+type RoundType int
+
+const (
+	// RoundDown rounds toward zero.
+	RoundDown RoundType = iota
+	// RoundUp rounds away from zero.
+	RoundUp
+	// RoundHalfUp (half up).
+	RoundHalfUp
+)
+
 // Rat represents a rational number without heap allocation.
 // Uses denominator = 0 to represent an invalid state.
 type Rat struct {
@@ -75,13 +87,13 @@ func One() Rat {
 
 // IsValid checks if the rational number is valid.
 // Returns true if denominator > 0.
-func (r *Rat) IsValid() bool {
+func (r Rat) IsValid() bool {
 	return r.denominator > 0
 }
 
 // IsInvalid checks if the rational number is invalid.
 // Returns true if denominator == 0.
-func (r *Rat) IsInvalid() bool {
+func (r Rat) IsInvalid() bool {
 	return r.denominator == 0
 }
 
@@ -303,39 +315,39 @@ func (r *Rat) Div(other Rat) {
 
 // Added returns the sum of current and another rational number (immutable operation).
 // Doesn't modify the original rational number.
-func (r *Rat) Added(other Rat) Rat {
-	result := *r // make a copy
+func (r Rat) Added(other Rat) Rat {
+	result := r // make a copy
 	result.Add(other)
 	return result
 }
 
 // Subtracted returns the difference of current and another rational number (immutable operation).
 // Doesn't modify the original rational number.
-func (r *Rat) Subtracted(other Rat) Rat {
-	result := *r // make a copy
+func (r Rat) Subtracted(other Rat) Rat {
+	result := r // make a copy
 	result.Sub(other)
 	return result
 }
 
 // Multiplied returns the product of current and another rational number (immutable operation).
 // Doesn't modify the original rational number.
-func (r *Rat) Multiplied(other Rat) Rat {
-	result := *r // make a copy
+func (r Rat) Multiplied(other Rat) Rat {
+	result := r // make a copy
 	result.Mul(other)
 	return result
 }
 
 // Divided returns the quotient of current divided by another rational number (immutable operation).
 // Doesn't modify the original rational number.
-func (r *Rat) Divided(other Rat) Rat {
-	result := *r // make a copy
+func (r Rat) Divided(other Rat) Rat {
+	result := r // make a copy
 	result.Div(other)
 	return result
 }
 
 // Equal checks equality of two rational numbers.
 // Returns false for any invalid operands, consistent with comparison semantics.
-func (r *Rat) Equal(other Rat) bool {
+func (r Rat) Equal(other Rat) bool {
 	// Invalid operands are never equal to anything (including other invalid operands)
 	if r.IsInvalid() || other.IsInvalid() {
 		return false
@@ -345,7 +357,7 @@ func (r *Rat) Equal(other Rat) bool {
 
 // Less checks if current rational number is less than another.
 // Returns false for any invalid operands, consistent with comparison semantics.
-func (r *Rat) Less(other Rat) bool {
+func (r Rat) Less(other Rat) bool {
 	// Invalid operands cannot be ordered
 	if r.IsInvalid() || other.IsInvalid() {
 		return false
@@ -355,7 +367,7 @@ func (r *Rat) Less(other Rat) bool {
 
 // Greater checks if current rational number is greater than another.
 // Returns false for any invalid operands, consistent with comparison semantics.
-func (r *Rat) Greater(other Rat) bool {
+func (r Rat) Greater(other Rat) bool {
 	// Invalid operands cannot be ordered
 	if r.IsInvalid() || other.IsInvalid() {
 		return false
@@ -367,7 +379,7 @@ func (r *Rat) Greater(other Rat) bool {
 // Returns -1 if r < other, 0 if r == other, 1 if r > other.
 // Returns 0 for any invalid operands (cannot be meaningfully compared).
 // Uses single 128-bit cross-multiplication for optimal performance.
-func (r *Rat) Compare(other Rat) int {
+func (r Rat) Compare(other Rat) int {
 	// Invalid operands cannot be meaningfully compared - return equal
 	if r.IsInvalid() || other.IsInvalid() {
 		return 0
@@ -385,9 +397,13 @@ func (r *Rat) Compare(other Rat) int {
 // String returns string representation of rational number.
 // Format: "numerator/denominator" or "numerator" if denominator == 1.
 // Returns "invalid" for invalid state.
-func (r *Rat) String() string {
+func (r Rat) String() string {
 	if r.IsInvalid() {
 		return "invalid"
+	}
+
+	if r.numerator == 0 {
+		return "0"
 	}
 
 	if r.denominator == 1 {
@@ -465,9 +481,184 @@ func (r *Rat) Reduce() {
 
 // Reduced returns a new rational number reduced to its lowest terms (immutable operation).
 // Does not modify the original rational number.
-func (r *Rat) Reduced() Rat {
-	result := *r // create copy
+func (r Rat) Reduced() Rat {
+	result := r // create copy
 	result.Reduce()
+	return result
+}
+
+// Round rounds the rational number to the specified scale (mutable operation).
+// Uses the given rounding strategy (RoundType) to determine the rounding behavior.
+// If the rational number is invalid, it remains invalid.
+//
+// Scale interpretation:
+// - scale = 0: round to integer (1.23 -> 1)
+// - scale > 0: round to decimal places (1.234 with scale=2 -> 1.23)
+// - scale < 0: round to powers of 10 (1234 with scale=-2 -> 1200).
+func (r *Rat) Round(roundType RoundType, scale int) {
+	// If invalid, remain invalid
+	if r.IsInvalid() {
+		return
+	}
+
+	// If zero, no rounding needed
+	if r.numerator == 0 {
+		return
+	}
+
+	// Calculate the scaling factor (10^|scale|)
+	var scaleFactor uint64
+	var scaleFactorOverflow bool
+
+	if scale >= 0 {
+		scaleFactor, scaleFactorOverflow = powerOf10(scale)
+	} else {
+		scaleFactor, scaleFactorOverflow = powerOf10(-scale)
+	}
+
+	// Handle overflow in scale factor calculation
+	if scaleFactorOverflow {
+		if scale >= 0 {
+			// Very large positive scale - result would be extremely precise
+			// For practical purposes, mark as invalid
+			r.Invalidate()
+			return
+		}
+		// Very large negative scale - round to zero
+		r.numerator = 0
+		r.denominator = 1
+		return
+	}
+
+	if scale == 0 {
+		// Round to integer: compute round(numerator/denominator)
+		roundedInt := roundDivision(r.numerator, r.denominator, roundType)
+		r.numerator = roundedInt
+		r.denominator = 1
+		return
+	}
+
+	if scale > 0 {
+		r.roundToDecimalPlaces(scaleFactor, roundType)
+	} else {
+		r.roundToPowersOfTen(scaleFactor, roundType)
+	}
+
+	// Handle zero result
+	if r.numerator == 0 {
+		r.numerator = 0
+		r.denominator = 1
+		return
+	}
+
+	// Reduce to lowest terms
+	r.Reduce()
+}
+
+// roundToDecimalPlaces handles rounding to a positive number of decimal places.
+func (r *Rat) roundToDecimalPlaces(scaleFactor uint64, roundType RoundType) {
+	// Round to decimal places
+	// To round a/b to scale decimal places:
+	// 1. Multiply by 10^scale: (a * 10^scale) / b
+	// 2. Round to integer: round((a * 10^scale) / b)
+	// 3. Result is rounded_value / 10^scale
+
+	// First check if the number is already exact at the requested scale
+	// This happens when the denominator divides 10^scale evenly
+	if scaleFactor%r.denominator == 0 {
+		// Already exact - convert to standard scale format
+		// Convert to the requested scale: a/b = (a * (10^scale / b)) / 10^scale
+		multiplier := scaleFactor / r.denominator
+
+		// Check for overflow in the multiplication
+		if willOverflowInt64MulUint64(r.numerator, multiplier) {
+			// If we can't represent at the requested scale due to overflow,
+			// but the value is already exact, just leave it as-is
+			// This handles cases like MaxInt64 with scale 1
+			return
+		}
+
+		var newNumerator int64
+		if r.numerator >= 0 {
+			newNumerator = r.numerator * int64(multiplier) //nolint:gosec // overflow checked above
+		} else {
+			absNum := uint64(-r.numerator)
+			newNumerator = -int64(absNum * multiplier) //nolint:gosec // overflow checked above
+		}
+
+		r.numerator = newNumerator
+		r.denominator = scaleFactor
+		return
+	}
+
+	// Check for overflow in numerator multiplication
+	if willOverflowInt64MulUint64(r.numerator, scaleFactor) {
+		r.Invalidate()
+		return
+	}
+
+	// Multiply numerator by scale factor
+	var scaledNumerator int64
+	if r.numerator >= 0 {
+		scaledNumerator = r.numerator * int64(scaleFactor) //nolint:gosec // overflow checked above
+	} else {
+		// Handle negative case carefully to avoid overflow
+		absNum := uint64(-r.numerator)
+		scaledNumerator = -int64(absNum * scaleFactor) //nolint:gosec // overflow checked above
+	}
+
+	// Round the scaled value to integer
+	roundedInt := roundDivision(scaledNumerator, r.denominator, roundType)
+
+	// Set result as roundedInt / scaleFactor
+	r.numerator = roundedInt
+	r.denominator = scaleFactor
+}
+
+// roundToPowersOfTen handles rounding to powers of 10 (negative scale).
+func (r *Rat) roundToPowersOfTen(scaleFactor uint64, roundType RoundType) {
+	// scale < 0: Round to powers of 10
+	// To round a/b to nearest multiple of 10^(-scale):
+	// 1. Compute a/b
+	// 2. Divide by 10^(-scale): (a/b) / 10^(-scale) = a / (b * 10^(-scale))
+	// 3. Round to integer: round(a / (b * 10^(-scale)))
+	// 4. Multiply back: rounded_value * 10^(-scale)
+
+	// Check for overflow in denominator multiplication
+	if willOverflowUint64Mul(r.denominator, scaleFactor) {
+		r.Invalidate()
+		return
+	}
+
+	// Scale the denominator
+	scaledDenominator := r.denominator * scaleFactor
+
+	// Round to integer
+	roundedInt := roundDivision(r.numerator, scaledDenominator, roundType)
+
+	// Multiply back by scale factor
+	if willOverflowInt64MulUint64(roundedInt, scaleFactor) {
+		r.Invalidate()
+		return
+	}
+
+	var finalNumerator int64
+	if roundedInt >= 0 {
+		finalNumerator = roundedInt * int64(scaleFactor) //nolint:gosec // overflow checked above
+	} else {
+		// Handle negative case carefully
+		absRounded := uint64(-roundedInt)
+		finalNumerator = -int64(absRounded * scaleFactor) //nolint:gosec // overflow checked above
+	}
+
+	r.numerator = finalNumerator
+	r.denominator = 1
+}
+
+// Rounded returns a new rational number rounded to the nearest integer (immutable operation).
+func (r Rat) Rounded(roundType RoundType, scale int) Rat {
+	result := r // create copy
+	result.Round(roundType, scale)
 	return result
 }
 
@@ -791,4 +982,147 @@ func float64ToRatExact(value float64) Rat {
 	// denPow is in [0,63]; safe shift
 	den := uint64(1) << uint(denPow) //nolint:gosec // denPow is bounded in [0,63], safe shift
 	return Rat{numerator: n, denominator: den}
+}
+
+// powerOf10 calculates 10^exp as uint64, returning (result, overflow).
+// Returns overflow=true if the result would exceed uint64 capacity.
+func powerOf10(exp int) (uint64, bool) {
+	if exp < 0 {
+		return 0, true // Invalid input
+	}
+	if exp == 0 {
+		return 1, false
+	}
+
+	// Pre-computed powers of 10 up to 10^19 (max that fits in uint64)
+	// 10^20 = 100000000000000000000 > 2^64-1 = 18446744073709551615
+	powers := []uint64{
+		1,                    // 10^0
+		10,                   // 10^1
+		100,                  // 10^2
+		1000,                 // 10^3
+		10000,                // 10^4
+		100000,               // 10^5
+		1000000,              // 10^6
+		10000000,             // 10^7
+		100000000,            // 10^8
+		1000000000,           // 10^9
+		10000000000,          // 10^10
+		100000000000,         // 10^11
+		1000000000000,        // 10^12
+		10000000000000,       // 10^13
+		100000000000000,      // 10^14
+		1000000000000000,     // 10^15
+		10000000000000000,    // 10^16
+		100000000000000000,   // 10^17
+		1000000000000000000,  // 10^18
+		10000000000000000000, // 10^19
+	}
+
+	if exp >= len(powers) {
+		return 0, true // Overflow
+	}
+
+	return powers[exp], false
+}
+
+// willOverflowInt64MulUint64 checks if multiplying int64 by uint64 would overflow int64 range.
+func willOverflowInt64MulUint64(a int64, b uint64) bool {
+	if a == 0 || b == 0 {
+		return false
+	}
+
+	if a > 0 {
+		// Positive case: check if a * b > MaxInt64
+		return uint64(a) > uint64(math.MaxInt64)/b
+	}
+	// Negative case: check if a * b < MinInt64
+	// Since a < 0, we need |a| * b <= |MinInt64| = 2^63
+	absA := uint64(-a)
+	// Special case for MinInt64: -MinInt64 would overflow, but we can handle it
+	if a == math.MinInt64 {
+		// MinInt64 * b should not overflow if b == 1
+		return b > 1
+	}
+	// For other negative values, check if |a| * b > 2^63
+	return absA > (uint64(math.MaxInt64)+1)/b
+}
+
+// roundDivision performs integer division with rounding according to RoundType.
+// Computes round(numerator / denominator) using the specified rounding strategy.
+func roundDivision(numerator int64, denominator uint64, roundType RoundType) int64 {
+	if denominator == 0 {
+		return 0 // Should not happen, but be safe
+	}
+
+	if numerator == 0 {
+		return 0
+	}
+
+	// Get the quotient and remainder
+	var quotient int64
+	var remainder uint64
+
+	if numerator >= 0 {
+		quotient = numerator / int64(denominator) //nolint:gosec // safe conversion
+		remainder = uint64(numerator) % denominator
+	} else {
+		// Handle negative numerator
+		absNum := uint64(-numerator)
+		quotient = -int64(absNum / denominator) //nolint:gosec // safe conversion
+		remainder = absNum % denominator
+	}
+
+	// If no remainder, return exact quotient
+	if remainder == 0 {
+		return quotient
+	}
+
+	// Apply rounding strategy
+	switch roundType {
+	case RoundDown:
+		// Truncate toward zero (no adjustment needed)
+		return quotient
+
+	case RoundUp:
+		// Round away from zero
+		if numerator > 0 {
+			return quotient + 1
+		}
+		return quotient - 1
+
+	case RoundHalfUp:
+		// Round half values toward positive infinity
+		// This means: for positive numbers, round up; for negative numbers, round toward zero
+
+		// Check if remainder * 2 compared to denominator
+		// remainder * 2 > denominator: more than half
+		// remainder * 2 = denominator: exactly half
+		// remainder * 2 < denominator: less than half
+		doubleRemainder := remainder * 2
+
+		if doubleRemainder > denominator {
+			// More than half - round away from zero
+			if numerator > 0 {
+				return quotient + 1
+			}
+			return quotient - 1
+		}
+
+		if doubleRemainder == denominator {
+			// Exactly half - round toward positive infinity
+			if numerator > 0 {
+				// Positive: round up (away from zero)
+				return quotient + 1
+			}
+			// Negative: round toward positive (toward zero)
+			return quotient
+		}
+
+		// Less than half - no adjustment
+		return quotient
+
+	default:
+		return quotient
+	}
 }

@@ -256,6 +256,11 @@ func TestRat_String(t *testing.T) {
 			expected: "0",
 		},
 		{
+			name:     "zero with non 1 denominator",
+			rat:      New(0, 2),
+			expected: "0",
+		},
+		{
 			name:     "zero with different denominator",
 			rat:      New(0, 5),
 			expected: "0",
