@@ -181,6 +181,25 @@ func SameCurrency(a, b Money) bool {
 	return hasSameCurrency(a, b)
 }
 
+// SameCurrencies is a convenience function that checks if all Money values have the same currency.
+// Returns true if there are less than 2 Money values, or if all Money values have the same currency.
+func SameCurrencies(moneys ...Money) bool {
+	if len(moneys) == 0 {
+		return true
+	}
+
+	if len(moneys) == 1 {
+		return moneys[0].IsValid()
+	}
+
+	for i := 1; i < len(moneys); i++ {
+		if !hasSameCurrency(moneys[0], moneys[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // IsNegative checks if the Money represents a negative value.
 // Returns true if Money is valid and amount is less than zero.
 // Uses value receiver as this is an immutable operation.

@@ -302,6 +302,139 @@ func TestSameCurrency(t *testing.T) {
 	})
 }
 
+// TestSameCurrencies tests the SameCurrencies variadic function
+func TestSameCurrencies(t *testing.T) {
+	t.Run("no arguments", func(t *testing.T) {
+		result := SameCurrencies()
+		assert.True(t, result, "SameCurrencies with no arguments should return true")
+	})
+
+	t.Run("single money - valid", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		result := SameCurrencies(m1)
+		assert.True(t, result, "SameCurrencies with single valid money should return true")
+	})
+
+	t.Run("single money - invalid", func(t *testing.T) {
+		m1 := NewMoneyInt("", 100) // invalid
+		result := SameCurrencies(m1)
+		assert.False(t, result, "SameCurrencies with single invalid money should return false")
+	})
+
+	t.Run("two money - same currency both valid", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("USD", 200)
+		result := SameCurrencies(m1, m2)
+		assert.True(t, result, "SameCurrencies with same currency should return true")
+	})
+
+	t.Run("two money - different currency both valid", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("EUR", 200)
+		result := SameCurrencies(m1, m2)
+		assert.False(t, result, "SameCurrencies with different currencies should return false")
+	})
+
+	t.Run("two money - one invalid", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("", 200) // invalid
+		result := SameCurrencies(m1, m2)
+		assert.False(t, result, "SameCurrencies with one invalid money should return false")
+	})
+
+	t.Run("two money - both invalid", func(t *testing.T) {
+		m1 := NewMoneyInt("", 100) // invalid
+		m2 := NewMoneyInt("", 200) // invalid
+		result := SameCurrencies(m1, m2)
+		assert.False(t, result, "SameCurrencies with both invalid money should return false")
+	})
+
+	t.Run("three money - all same currency", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("USD", 200)
+		m3 := NewMoneyInt("USD", 300)
+		result := SameCurrencies(m1, m2, m3)
+		assert.True(t, result, "SameCurrencies with three same currency should return true")
+	})
+
+	t.Run("three money - first two same, third different", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("USD", 200)
+		m3 := NewMoneyInt("EUR", 300)
+		result := SameCurrencies(m1, m2, m3)
+		assert.False(t, result, "SameCurrencies with mixed currencies should return false")
+	})
+
+	t.Run("three money - first different from second and third", func(t *testing.T) {
+		m1 := NewMoneyInt("GBP", 100)
+		m2 := NewMoneyInt("USD", 200)
+		m3 := NewMoneyInt("USD", 300)
+		result := SameCurrencies(m1, m2, m3)
+		assert.False(t, result, "SameCurrencies with first different should return false")
+	})
+
+	t.Run("three money - all different currencies", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("EUR", 200)
+		m3 := NewMoneyInt("GBP", 300)
+		result := SameCurrencies(m1, m2, m3)
+		assert.False(t, result, "SameCurrencies with all different currencies should return false")
+	})
+
+	t.Run("three money - one invalid in middle", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("", 200) // invalid
+		m3 := NewMoneyInt("USD", 300)
+		result := SameCurrencies(m1, m2, m3)
+		assert.False(t, result, "SameCurrencies with invalid money in middle should return false")
+	})
+
+	t.Run("five money - all same currency", func(t *testing.T) {
+		m1 := NewMoneyInt("EUR", 100)
+		m2 := NewMoneyInt("EUR", 200)
+		m3 := NewMoneyInt("EUR", 300)
+		m4 := NewMoneyInt("EUR", 400)
+		m5 := NewMoneyInt("EUR", 500)
+		result := SameCurrencies(m1, m2, m3, m4, m5)
+		assert.True(t, result, "SameCurrencies with five same currency should return true")
+	})
+
+	t.Run("five money - last one different", func(t *testing.T) {
+		m1 := NewMoneyInt("EUR", 100)
+		m2 := NewMoneyInt("EUR", 200)
+		m3 := NewMoneyInt("EUR", 300)
+		m4 := NewMoneyInt("EUR", 400)
+		m5 := NewMoneyInt("JPY", 500)
+		result := SameCurrencies(m1, m2, m3, m4, m5)
+		assert.False(t, result, "SameCurrencies with last different should return false")
+	})
+
+	t.Run("mixed valid and invalid money", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", 100)
+		m2 := NewMoneyInt("", 200) // invalid
+		m3 := NewMoneyInt("USD", 300)
+		m4 := NewMoneyInt("", 400) // invalid
+		result := SameCurrencies(m1, m2, m3, m4)
+		assert.False(t, result, "SameCurrencies with mixed valid/invalid should return false")
+	})
+
+	t.Run("zero amounts with same currency", func(t *testing.T) {
+		m1 := ZeroMoney("USD")
+		m2 := NewMoneyInt("USD", 0)
+		m3 := NewMoneyFromFraction(0, 1, "USD")
+		result := SameCurrencies(m1, m2, m3)
+		assert.True(t, result, "SameCurrencies with zero amounts same currency should return true")
+	})
+
+	t.Run("negative amounts with same currency", func(t *testing.T) {
+		m1 := NewMoneyInt("USD", -100)
+		m2 := NewMoneyInt("USD", -200)
+		m3 := NewMoneyInt("USD", 300)
+		result := SameCurrencies(m1, m2, m3)
+		assert.True(t, result, "SameCurrencies with negative amounts same currency should return true")
+	})
+}
+
 // TestMoney_StatusMethods tests the status predicate methods
 func TestMoney_StatusMethods(t *testing.T) {
 	t.Run("IsNegative", func(t *testing.T) {
