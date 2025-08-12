@@ -538,3 +538,849 @@ func TestRat_AddSubCommon_EdgeCases(t *testing.T) {
 		assert.True(t, r4.IsInvalid(), "should be invalid due to final subtraction overflow")
 	})
 }
+
+// TestRat_IntArithmetic tests arithmetic operations with int64 values
+func TestRat_IntArithmetic(t *testing.T) {
+	t.Run("AddInt", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     int64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "add positive int to fraction",
+				receiver:  New(1, 2), // 1/2
+				value:     3,         // 3
+				wantNum:   7,         // 1/2 + 3 = 1/2 + 6/2 = 7/2
+				wantDenom: 2,
+			},
+			{
+				name:      "add negative int to fraction",
+				receiver:  New(3, 4), // 3/4
+				value:     -2,        // -2
+				wantNum:   -5,        // 3/4 + (-2) = 3/4 - 8/4 = -5/4
+				wantDenom: 4,
+			},
+			{
+				name:      "add zero",
+				receiver:  New(5, 7), // 5/7
+				value:     0,         // 0
+				wantNum:   5,         // 5/7 + 0 = 5/7
+				wantDenom: 7,
+			},
+			{
+				name:      "add to zero",
+				receiver:  New(0, 1), // 0
+				value:     42,        // 42
+				wantNum:   42,        // 0 + 42 = 42/1
+				wantDenom: 1,
+			},
+			{
+				name:      "add large int",
+				receiver:  New(1, 3), // 1/3
+				value:     1000000,   // 1000000
+				wantNum:   3000001,   // 1/3 + 1000000 = 1/3 + 3000000/3 = 3000001/3
+				wantDenom: 3,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.AddInt(tt.value)
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			})
+		}
+	})
+
+	t.Run("AddedInt", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     int64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "add positive int to fraction",
+				receiver:  New(1, 2), // 1/2
+				value:     3,         // 3
+				wantNum:   7,         // 1/2 + 3 = 7/2
+				wantDenom: 2,
+			},
+			{
+				name:      "add negative int to fraction",
+				receiver:  New(3, 4), // 3/4
+				value:     -1,        // -1
+				wantNum:   -1,        // 3/4 + (-1) = 3/4 - 4/4 = -1/4
+				wantDenom: 4,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.AddedInt(tt.value)
+
+				// Check the result
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+
+				// Check that the original hasn't changed
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "receiver should not be modified")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "receiver should not be modified")
+			})
+		}
+	})
+
+	t.Run("SubInt", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     int64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "subtract positive int from fraction",
+				receiver:  New(7, 2), // 7/2
+				value:     3,         // 3
+				wantNum:   1,         // 7/2 - 3 = 7/2 - 6/2 = 1/2
+				wantDenom: 2,
+			},
+			{
+				name:      "subtract negative int from fraction",
+				receiver:  New(1, 4), // 1/4
+				value:     -2,        // -2
+				wantNum:   9,         // 1/4 - (-2) = 1/4 + 8/4 = 9/4
+				wantDenom: 4,
+			},
+			{
+				name:      "subtract zero",
+				receiver:  New(5, 7), // 5/7
+				value:     0,         // 0
+				wantNum:   5,         // 5/7 - 0 = 5/7
+				wantDenom: 7,
+			},
+			{
+				name:      "subtract from zero",
+				receiver:  New(0, 1), // 0
+				value:     42,        // 42
+				wantNum:   -42,       // 0 - 42 = -42/1
+				wantDenom: 1,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.SubInt(tt.value)
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			})
+		}
+	})
+
+	t.Run("SubtractedInt", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     int64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "subtract positive int from fraction",
+				receiver:  New(7, 2), // 7/2
+				value:     3,         // 3
+				wantNum:   1,         // 7/2 - 3 = 1/2
+				wantDenom: 2,
+			},
+			{
+				name:      "subtract negative int from fraction",
+				receiver:  New(1, 4), // 1/4
+				value:     -1,        // -1
+				wantNum:   5,         // 1/4 - (-1) = 1/4 + 4/4 = 5/4
+				wantDenom: 4,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.SubtractedInt(tt.value)
+
+				// Check the result
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+
+				// Check that the original hasn't changed
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "receiver should not be modified")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "receiver should not be modified")
+			})
+		}
+	})
+
+	t.Run("MulInt", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     int64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "multiply fraction by positive int",
+				receiver:  New(3, 4), // 3/4
+				value:     2,         // 2
+				wantNum:   6,         // 3/4 * 2 = 6/4
+				wantDenom: 4,
+			},
+			{
+				name:      "multiply fraction by negative int",
+				receiver:  New(2, 5), // 2/5
+				value:     -3,        // -3
+				wantNum:   -6,        // 2/5 * (-3) = -6/5
+				wantDenom: 5,
+			},
+			{
+				name:      "multiply by zero",
+				receiver:  New(7, 3), // 7/3
+				value:     0,         // 0
+				wantNum:   0,         // 7/3 * 0 = 0/1
+				wantDenom: 1,
+			},
+			{
+				name:      "multiply by one",
+				receiver:  New(5, 8), // 5/8
+				value:     1,         // 1
+				wantNum:   5,         // 5/8 * 1 = 5/8
+				wantDenom: 8,
+			},
+			{
+				name:      "multiply zero by int",
+				receiver:  New(0, 1), // 0
+				value:     42,        // 42
+				wantNum:   0,         // 0 * 42 = 0/1
+				wantDenom: 1,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.MulInt(tt.value)
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			})
+		}
+	})
+
+	t.Run("MultipliedInt", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     int64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "multiply fraction by positive int",
+				receiver:  New(3, 4), // 3/4
+				value:     2,         // 2
+				wantNum:   6,         // 3/4 * 2 = 6/4
+				wantDenom: 4,
+			},
+			{
+				name:      "multiply fraction by negative int",
+				receiver:  New(2, 5), // 2/5
+				value:     -3,        // -3
+				wantNum:   -6,        // 2/5 * (-3) = -6/5
+				wantDenom: 5,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.MultipliedInt(tt.value)
+
+				// Check the result
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+
+				// Check that the original hasn't changed
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "receiver should not be modified")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "receiver should not be modified")
+			})
+		}
+	})
+
+	t.Run("DivInt", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     int64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "divide fraction by positive int",
+				receiver:  New(6, 4), // 6/4 = 3/2 (reduced by constructor)
+				value:     2,         // 2
+				wantNum:   3,         // 3/2 ÷ 2 = 3/2 * 1/2 = 3/4
+				wantDenom: 4,
+			},
+			{
+				name:      "divide fraction by negative int",
+				receiver:  New(3, 5), // 3/5
+				value:     -2,        // -2
+				wantNum:   -3,        // 3/5 ÷ (-2) = 3/5 * (-1/2) = -3/10
+				wantDenom: 10,
+			},
+			{
+				name:      "divide by one",
+				receiver:  New(7, 3), // 7/3
+				value:     1,         // 1
+				wantNum:   7,         // 7/3 ÷ 1 = 7/3
+				wantDenom: 3,
+			},
+			{
+				name:      "divide zero by int",
+				receiver:  New(0, 1), // 0
+				value:     42,        // 42
+				wantNum:   0,         // 0 ÷ 42 = 0/1
+				wantDenom: 1,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.DivInt(tt.value)
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			})
+		}
+	})
+
+	t.Run("DividedInt", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     int64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "divide fraction by positive int",
+				receiver:  New(6, 4), // 6/4 = 3/2 (reduced by constructor)
+				value:     2,         // 2
+				wantNum:   3,         // 3/2 ÷ 2 = 3/4
+				wantDenom: 4,
+			},
+			{
+				name:      "divide fraction by negative int",
+				receiver:  New(3, 5), // 3/5
+				value:     -2,        // -2
+				wantNum:   -3,        // 3/5 ÷ (-2) = -3/10
+				wantDenom: 10,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.DividedInt(tt.value)
+
+				// Check the result
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+
+				// Check that the original hasn't changed
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "receiver should not be modified")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "receiver should not be modified")
+			})
+		}
+	})
+}
+
+// TestRat_FloatArithmetic tests arithmetic operations with float64 values
+func TestRat_FloatArithmetic(t *testing.T) {
+	t.Run("AddFloat", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     float64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "add positive float to fraction",
+				receiver:  New(1, 2), // 1/2 = 0.5
+				value:     0.25,      // 0.25 = 1/4
+				wantNum:   6,         // 1/2 + 1/4 = (1*4 + 1*2)/(2*4) = 6/8 (not reduced)
+				wantDenom: 8,
+			},
+			{
+				name:      "add negative float to fraction",
+				receiver:  New(3, 4), // 3/4 = 0.75
+				value:     -0.5,      // -0.5 = -1/2
+				wantNum:   2,         // 3/4 + (-1/2) = (3*2 + (-1)*4)/(4*2) = (6-4)/8 = 2/8 (not reduced)
+				wantDenom: 8,
+			},
+			{
+				name:      "add zero float",
+				receiver:  New(5, 7), // 5/7
+				value:     0.0,       // 0
+				wantNum:   5,         // 5/7 + 0 = 5/7
+				wantDenom: 7,
+			},
+			{
+				name:      "add float to zero",
+				receiver:  New(0, 1), // 0
+				value:     0.125,     // 0.125 = 1/8
+				wantNum:   1,         // 0 + 1/8 = 1/8
+				wantDenom: 8,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.AddFloat(tt.value)
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			})
+		}
+	})
+
+	t.Run("AddedFloat", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     float64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "add positive float to fraction",
+				receiver:  New(1, 2), // 1/2 = 0.5
+				value:     0.25,      // 0.25 = 1/4
+				wantNum:   6,         // 1/2 + 1/4 = 6/8 (not reduced)
+				wantDenom: 8,
+			},
+			{
+				name:      "add negative float to fraction",
+				receiver:  New(3, 4), // 3/4 = 0.75
+				value:     -0.25,     // -0.25 = -1/4
+				wantNum:   2,         // 3/4 + (-1/4) = (3*4 + (-1)*4)/(4*4) = (12-4)/16 = 8/16 but reduced by constructor to 2/4
+				wantDenom: 4,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.AddedFloat(tt.value)
+
+				// Check the result
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+
+				// Check that the original hasn't changed
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "receiver should not be modified")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "receiver should not be modified")
+			})
+		}
+	})
+
+	t.Run("SubFloat", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     float64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "subtract positive float from fraction",
+				receiver:  New(3, 4), // 3/4 = 0.75
+				value:     0.25,      // 0.25 = 1/4
+				wantNum:   2,         // 3/4 - 1/4 = (3*4 - 1*4)/(4*4) = 8/16 = 2/4 (reduced)
+				wantDenom: 4,
+			},
+			{
+				name:      "subtract negative float from fraction",
+				receiver:  New(1, 4), // 1/4 = 0.25
+				value:     -0.5,      // -0.5 = -1/2
+				wantNum:   6,         // 1/4 - (-1/2) = (1*2 - (-1)*4)/(4*2) = (2+4)/8 = 6/8 (not reduced)
+				wantDenom: 8,
+			},
+			{
+				name:      "subtract zero float",
+				receiver:  New(5, 7), // 5/7
+				value:     0.0,       // 0
+				wantNum:   5,         // 5/7 - 0 = 5/7
+				wantDenom: 7,
+			},
+			{
+				name:      "subtract float from zero",
+				receiver:  New(0, 1), // 0
+				value:     0.125,     // 0.125 = 1/8
+				wantNum:   -1,        // 0 - 1/8 = -1/8
+				wantDenom: 8,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.SubFloat(tt.value)
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			})
+		}
+	})
+
+	t.Run("SubtractedFloat", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     float64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "subtract positive float from fraction",
+				receiver:  New(3, 4), // 3/4 = 0.75
+				value:     0.25,      // 0.25 = 1/4
+				wantNum:   2,         // 3/4 - 1/4 = 2/4 (reduced)
+				wantDenom: 4,
+			},
+			{
+				name:      "subtract negative float from fraction",
+				receiver:  New(1, 4), // 1/4 = 0.25
+				value:     -0.25,     // -0.25 = -1/4
+				wantNum:   2,         // 1/4 - (-1/4) = 1/4 + 1/4 = 2/4 (reduced)
+				wantDenom: 4,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.SubtractedFloat(tt.value)
+
+				// Check the result
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+
+				// Check that the original hasn't changed
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "receiver should not be modified")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "receiver should not be modified")
+			})
+		}
+	})
+
+	t.Run("MulFloat", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     float64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "multiply fraction by positive float",
+				receiver:  New(3, 4), // 3/4 = 0.75
+				value:     0.5,       // 0.5 = 1/2
+				wantNum:   3,         // 3/4 * 1/2 = 3/8
+				wantDenom: 8,
+			},
+			{
+				name:      "multiply fraction by negative float",
+				receiver:  New(2, 5), // 2/5 = 0.4
+				value:     -0.25,     // -0.25 = -1/4
+				wantNum:   -2,        // 2/5 * (-1/4) = -2/20 (not reduced)
+				wantDenom: 20,
+			},
+			{
+				name:      "multiply by zero float",
+				receiver:  New(7, 3), // 7/3
+				value:     0.0,       // 0
+				wantNum:   0,         // 7/3 * 0 = 0/1
+				wantDenom: 1,
+			},
+			{
+				name:      "multiply by one float",
+				receiver:  New(5, 8), // 5/8
+				value:     1.0,       // 1
+				wantNum:   5,         // 5/8 * 1 = 5/8
+				wantDenom: 8,
+			},
+			{
+				name:      "multiply zero by float",
+				receiver:  New(0, 1), // 0
+				value:     0.125,     // 0.125 = 1/8
+				wantNum:   0,         // 0 * 1/8 = 0/1
+				wantDenom: 1,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.MulFloat(tt.value)
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			})
+		}
+	})
+
+	t.Run("MultipliedFloat", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     float64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "multiply fraction by positive float",
+				receiver:  New(3, 4), // 3/4 = 0.75
+				value:     0.5,       // 0.5 = 1/2
+				wantNum:   3,         // 3/4 * 1/2 = 3/8
+				wantDenom: 8,
+			},
+			{
+				name:      "multiply fraction by negative float",
+				receiver:  New(2, 5), // 2/5 = 0.4
+				value:     -0.25,     // -0.25 = -1/4
+				wantNum:   -2,        // 2/5 * (-1/4) = -2/20 (not reduced)
+				wantDenom: 20,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.MultipliedFloat(tt.value)
+
+				// Check the result
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+
+				// Check that the original hasn't changed
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "receiver should not be modified")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "receiver should not be modified")
+			})
+		}
+	})
+
+	t.Run("DivFloat", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     float64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "divide fraction by positive float",
+				receiver:  New(3, 4), // 3/4 = 0.75
+				value:     0.5,       // 0.5 = 1/2
+				wantNum:   6,         // 3/4 ÷ 1/2 = 3/4 * 2/1 = 6/4 (not reduced)
+				wantDenom: 4,
+			},
+			{
+				name:      "divide fraction by negative float",
+				receiver:  New(1, 2), // 1/2 = 0.5
+				value:     -0.25,     // -0.25 = -1/4
+				wantNum:   -4,        // 1/2 ÷ (-1/4) = 1/2 * (-4/1) = -4/2 (not reduced)
+				wantDenom: 2,
+			},
+			{
+				name:      "divide by one float",
+				receiver:  New(7, 3), // 7/3
+				value:     1.0,       // 1
+				wantNum:   7,         // 7/3 ÷ 1 = 7/3
+				wantDenom: 3,
+			},
+			{
+				name:      "divide zero by float",
+				receiver:  New(0, 1), // 0
+				value:     0.125,     // 0.125 = 1/8
+				wantNum:   0,         // 0 ÷ 1/8 = 0/1
+				wantDenom: 1,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.DivFloat(tt.value)
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			})
+		}
+	})
+
+	t.Run("DividedFloat", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			value     float64
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "divide fraction by positive float",
+				receiver:  New(3, 4), // 3/4 = 0.75
+				value:     0.5,       // 0.5 = 1/2
+				wantNum:   6,         // 3/4 ÷ 1/2 = 6/4 (not reduced)
+				wantDenom: 4,
+			},
+			{
+				name:      "divide fraction by negative float",
+				receiver:  New(1, 2), // 1/2 = 0.5
+				value:     -0.25,     // -0.25 = -1/4
+				wantNum:   -4,        // 1/2 ÷ (-1/4) = -4/2 (not reduced)
+				wantDenom: 2,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.DividedFloat(tt.value)
+
+				// Check the result
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+
+				// Check that the original hasn't changed
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "receiver should not be modified")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "receiver should not be modified")
+			})
+		}
+	})
+}
+
+// TestRat_IntArithmetic_EdgeCases tests edge cases for int64 arithmetic operations
+func TestRat_IntArithmetic_EdgeCases(t *testing.T) {
+	t.Run("invalid state propagation", func(t *testing.T) {
+		// Test that invalid state is propagated through operations
+		invalid := New(1, 0) // invalid rational
+
+		// Mutable operations should remain invalid
+		invalid.AddInt(5)
+		assert.True(t, invalid.IsInvalid(), "AddInt should propagate invalid state")
+
+		invalid = New(1, 0)
+		invalid.SubInt(3)
+		assert.True(t, invalid.IsInvalid(), "SubInt should propagate invalid state")
+
+		invalid = New(1, 0)
+		invalid.MulInt(2)
+		assert.True(t, invalid.IsInvalid(), "MulInt should propagate invalid state")
+
+		invalid = New(1, 0)
+		invalid.DivInt(4)
+		assert.True(t, invalid.IsInvalid(), "DivInt should propagate invalid state")
+	})
+
+	t.Run("immutable operations with invalid state", func(t *testing.T) {
+		// Test that immutable operations return invalid results for invalid inputs
+		invalid := New(1, 0) // invalid rational
+
+		result := invalid.AddedInt(5)
+		assert.True(t, result.IsInvalid(), "AddedInt should return invalid result for invalid input")
+
+		result = invalid.SubtractedInt(3)
+		assert.True(t, result.IsInvalid(), "SubtractedInt should return invalid result for invalid input")
+
+		result = invalid.MultipliedInt(2)
+		assert.True(t, result.IsInvalid(), "MultipliedInt should return invalid result for invalid input")
+
+		result = invalid.DividedInt(4)
+		assert.True(t, result.IsInvalid(), "DividedInt should return invalid result for invalid input")
+	})
+
+	t.Run("division by zero", func(t *testing.T) {
+		// Test division by zero
+		r := New(5, 3)
+		r.DivInt(0)
+		assert.True(t, r.IsInvalid(), "DivInt by zero should result in invalid state")
+
+		r2 := New(7, 2)
+		result := r2.DividedInt(0)
+		assert.True(t, result.IsInvalid(), "DividedInt by zero should return invalid result")
+	})
+}
+
+// TestRat_FloatArithmetic_EdgeCases tests edge cases for float64 arithmetic operations
+func TestRat_FloatArithmetic_EdgeCases(t *testing.T) {
+	t.Run("invalid state propagation", func(t *testing.T) {
+		// Test that invalid state is propagated through operations
+		invalid := New(1, 0) // invalid rational
+
+		// Mutable operations should remain invalid
+		invalid.AddFloat(0.5)
+		assert.True(t, invalid.IsInvalid(), "AddFloat should propagate invalid state")
+
+		invalid = New(1, 0)
+		invalid.SubFloat(0.25)
+		assert.True(t, invalid.IsInvalid(), "SubFloat should propagate invalid state")
+
+		invalid = New(1, 0)
+		invalid.MulFloat(2.0)
+		assert.True(t, invalid.IsInvalid(), "MulFloat should propagate invalid state")
+
+		invalid = New(1, 0)
+		invalid.DivFloat(0.5)
+		assert.True(t, invalid.IsInvalid(), "DivFloat should propagate invalid state")
+	})
+
+	t.Run("immutable operations with invalid state", func(t *testing.T) {
+		// Test that immutable operations return invalid results for invalid inputs
+		invalid := New(1, 0) // invalid rational
+
+		result := invalid.AddedFloat(0.5)
+		assert.True(t, result.IsInvalid(), "AddedFloat should return invalid result for invalid input")
+
+		result = invalid.SubtractedFloat(0.25)
+		assert.True(t, result.IsInvalid(), "SubtractedFloat should return invalid result for invalid input")
+
+		result = invalid.MultipliedFloat(2.0)
+		assert.True(t, result.IsInvalid(), "MultipliedFloat should return invalid result for invalid input")
+
+		result = invalid.DividedFloat(0.5)
+		assert.True(t, result.IsInvalid(), "DividedFloat should return invalid result for invalid input")
+	})
+
+	t.Run("special float values", func(t *testing.T) {
+		// Test operations with special float values (NaN, Inf)
+		r := New(1, 2)
+
+		// NaN should result in invalid state
+		r.AddFloat(math.NaN())
+		assert.True(t, r.IsInvalid(), "AddFloat with NaN should result in invalid state")
+
+		r = New(1, 2)
+		r.AddFloat(math.Inf(1))
+		assert.True(t, r.IsInvalid(), "AddFloat with +Inf should result in invalid state")
+
+		r = New(1, 2)
+		r.AddFloat(math.Inf(-1))
+		assert.True(t, r.IsInvalid(), "AddFloat with -Inf should result in invalid state")
+
+		// Test division by zero float
+		r = New(3, 4)
+		r.DivFloat(0.0)
+		assert.True(t, r.IsInvalid(), "DivFloat by zero should result in invalid state")
+	})
+}
