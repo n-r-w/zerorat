@@ -314,7 +314,7 @@ func roundDivision(numerator int64, denominator uint64, roundType RoundType) int
 		// remainder * 2 > denominator: more than half
 		// remainder * 2 = denominator: exactly half
 		// remainder * 2 < denominator: less than half
-		doubleRemainder := remainder * 2
+		doubleRemainder := remainder * 2 //nolint:mnd // ok
 
 		if doubleRemainder > denominator {
 			// More than half - round away from zero
