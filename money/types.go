@@ -182,7 +182,6 @@ func SameCurrency(a, b Money) bool {
 }
 
 // SameCurrencies is a convenience function that checks if all Money values have the same currency.
-// Returns true if there are less than 2 Money values, or if all Money values have the same currency.
 func SameCurrencies(moneys ...Money) bool {
 	if len(moneys) == 0 {
 		return true
