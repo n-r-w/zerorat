@@ -214,6 +214,14 @@ func (r *Rat) Div(other Rat) {
 	r.denominator = newDenom
 }
 
+// Divided returns the quotient of current divided by another rational number (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) Divided(other Rat) Rat {
+	result := r // make a copy
+	result.Div(other)
+	return result
+}
+
 // Added returns the sum of current and another rational number (immutable operation).
 // Doesn't modify the original rational number.
 func (r Rat) Added(other Rat) Rat {
@@ -238,10 +246,106 @@ func (r Rat) Multiplied(other Rat) Rat {
 	return result
 }
 
-// Divided returns the quotient of current divided by another rational number (immutable operation).
+// AddInt adds an int64 value to the current rational number (mutable operation).
+func (r *Rat) AddInt(value int64) {
+	r.Add(NewFromInt(value))
+}
+
+// AddedInt returns the sum of current and an int64 value (immutable operation).
 // Doesn't modify the original rational number.
-func (r Rat) Divided(other Rat) Rat {
+func (r Rat) AddedInt(value int64) Rat {
 	result := r // make a copy
-	result.Div(other)
+	result.AddInt(value)
+	return result
+}
+
+// SubInt subtracts an int64 value from the current rational number (mutable operation).
+func (r *Rat) SubInt(value int64) {
+	r.Sub(NewFromInt(value))
+}
+
+// SubtractedInt returns the difference of current and an int64 value (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) SubtractedInt(value int64) Rat {
+	result := r // make a copy
+	result.SubInt(value)
+	return result
+}
+
+// MulInt multiplies the current rational number by an int64 value (mutable operation).
+func (r *Rat) MulInt(value int64) {
+	r.Mul(NewFromInt(value))
+}
+
+// MultipliedInt returns the product of current and an int64 value (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) MultipliedInt(value int64) Rat {
+	result := r // make a copy
+	result.MulInt(value)
+	return result
+}
+
+// DivInt divides the current rational number by an int64 value (mutable operation).
+func (r *Rat) DivInt(value int64) {
+	r.Div(NewFromInt(value))
+}
+
+// DividedInt returns the quotient of current divided by an int64 value (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) DividedInt(value int64) Rat {
+	result := r // make a copy
+	result.DivInt(value)
+	return result
+}
+
+// AddFloat adds a float64 value to the current rational number (mutable operation).
+func (r *Rat) AddFloat(value float64) {
+	r.Add(float64ToRatExact(value))
+}
+
+// AddedFloat returns the sum of current and a float64 value (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) AddedFloat(value float64) Rat {
+	result := r // make a copy
+	result.AddFloat(value)
+	return result
+}
+
+// SubFloat subtracts a float64 value from the current rational number (mutable operation).
+func (r *Rat) SubFloat(value float64) {
+	r.Sub(float64ToRatExact(value))
+}
+
+// SubtractedFloat returns the difference of current and a float64 value (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) SubtractedFloat(value float64) Rat {
+	result := r // make a copy
+	result.SubFloat(value)
+	return result
+}
+
+// MulFloat multiplies the current rational number by a float64 value (mutable operation).
+func (r *Rat) MulFloat(value float64) {
+	r.Mul(float64ToRatExact(value))
+}
+
+// MultipliedFloat returns the product of current and a float64 value (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) MultipliedFloat(value float64) Rat {
+	result := r // make a copy
+	result.MulFloat(value)
+	return result
+}
+
+// DivFloat divides the current rational number by a float64 value (mutable operation).
+func (r *Rat) DivFloat(value float64) {
+	r.Div(float64ToRatExact(value))
+}
+
+// DividedFloat returns the quotient of current divided by a float64 value (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) DividedFloat(value float64) Rat {
+	result := r // make a copy
+	result.DivFloat(value)
 	return result
 }

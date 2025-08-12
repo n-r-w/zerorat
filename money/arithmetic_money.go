@@ -1,8 +1,8 @@
 package money
 
-// MulMoney multiplies this Money by another Money (mutable operation).
+// Mul multiplies this Money by another Money (mutable operation).
 // Requires same currency. Result currency remains the same as operands.
-func (m *Money) MulMoney(other Money) error {
+func (m *Money) Mul(other Money) error {
 	// Check if either operand is invalid
 	if m.IsInvalid() || other.IsInvalid() {
 		m.Invalidate()
@@ -27,22 +27,22 @@ func (m *Money) MulMoney(other Money) error {
 	return nil
 }
 
-// MultipliedMoneyErr returns the product of this Money and another Money (immutable operation with error).
-func (m Money) MultipliedMoneyErr(other Money) (Money, error) {
+// MultipliedErr returns the product of this Money and another Money (immutable operation with error).
+func (m Money) MultipliedErr(other Money) (Money, error) {
 	result := m // copy
-	err := result.MulMoney(other)
+	err := result.Mul(other)
 	return result, err
 }
 
-// MultipliedMoney returns the product of this Money and another Money (immutable operation without error).
-func (m Money) MultipliedMoney(other Money) Money {
-	result, _ := m.MultipliedMoneyErr(other)
+// Multiplied returns the product of this Money and another Money (immutable operation without error).
+func (m Money) Multiplied(other Money) Money {
+	result, _ := m.MultipliedErr(other)
 	return result
 }
 
-// DivMoney divides this Money by another Money (mutable operation).
+// Div divides this Money by another Money (mutable operation).
 // Requires same currency. Result currency remains the same as operands.
-func (m *Money) DivMoney(other Money) error {
+func (m *Money) Div(other Money) error {
 	// Check if either operand is invalid
 	if m.IsInvalid() || other.IsInvalid() {
 		m.Invalidate()
@@ -73,16 +73,16 @@ func (m *Money) DivMoney(other Money) error {
 	return nil
 }
 
-// DividedMoneyErr returns the quotient of this Money and another Money (immutable operation with error).
-func (m Money) DividedMoneyErr(other Money) (Money, error) {
+// DividedErr returns the quotient of this Money and another Money (immutable operation with error).
+func (m Money) DividedErr(other Money) (Money, error) {
 	result := m // copy
-	err := result.DivMoney(other)
+	err := result.Div(other)
 	return result, err
 }
 
-// DividedMoney returns the quotient of this Money and another Money (immutable operation without error).
-func (m Money) DividedMoney(other Money) Money {
-	result, _ := m.DividedMoneyErr(other)
+// Divided returns the quotient of this Money and another Money (immutable operation without error).
+func (m Money) Divided(other Money) Money {
+	result, _ := m.DividedErr(other)
 	return result
 }
 

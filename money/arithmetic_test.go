@@ -850,64 +850,64 @@ func TestMoneyPercentOperations(t *testing.T) {
 		})
 	})
 
-	t.Run("PercentOf operations", func(t *testing.T) {
-		t.Run("mutable PercentOf - same currency success", func(t *testing.T) {
-			m1 := NewMoneyFloat("USD", 0.5) // 0.5 (50%)
-			m2 := NewMoneyInt("USD", 100)   // $1.00
+	t.Run("PercentMoney operations", func(t *testing.T) {
+		t.Run("mutable PercentMoney - same currency success", func(t *testing.T) {
+			m1 := NewMoneyInt("USD", 200) // $2.00
+			m2 := NewMoneyInt("USD", 50)  // 50 (as percentage rate)
 
-			err := m1.PercentOf(m2) // 0.5 * $1.00 = $0.50
+			err := m1.PercentMoney(m2) // $2.00 * (50 / 100) = $1.00
 
 			require.NoError(t, err)
 			assert.True(t, m1.IsValid())
-			expected := NewMoneyInt("USD", 50)
+			expected := NewMoneyInt("USD", 100)
 			assert.True(t, m1.Equal(expected))
 		})
 
-		t.Run("mutable PercentOf - different currency failure", func(t *testing.T) {
-			m1 := NewMoneyFloat("USD", 0.5)
-			m2 := NewMoneyInt("EUR", 100)
+		t.Run("mutable PercentMoney - different currency failure", func(t *testing.T) {
+			m1 := NewMoneyInt("USD", 200)
+			m2 := NewMoneyInt("EUR", 50)
 
-			err := m1.PercentOf(m2)
+			err := m1.PercentMoney(m2)
 
 			require.Error(t, err)
 			assert.Equal(t, ErrMoneyCurrencyMismatch, err)
 			assert.True(t, m1.IsInvalid())
 		})
 
-		t.Run("immutable PercentOfErr - same currency success", func(t *testing.T) {
-			m1 := NewMoneyFromFraction(1, 4, "USD") // 0.25 as exact fraction
-			m2 := NewMoneyInt("USD", 400)           // $4.00
+		t.Run("immutable PercentMoneyErr - same currency success", func(t *testing.T) {
+			m1 := NewMoneyInt("USD", 400) // $4.00
+			m2 := NewMoneyInt("USD", 25)  // 25 (as percentage rate)
 
-			result, err := m1.PercentOfErr(m2) // 0.25 * $4.00 = $1.00
+			result, err := m1.PercentMoneyErr(m2) // $4.00 * (25 / 100) = $1.00
 
 			require.NoError(t, err)
 			assert.True(t, result.IsValid())
 			expected := NewMoneyInt("USD", 100)
 			assert.True(t, result.Equal(expected))
 			// Original unchanged
-			original := NewMoneyFromFraction(1, 4, "USD")
+			original := NewMoneyInt("USD", 400)
 			assert.True(t, m1.Equal(original))
 		})
 
-		t.Run("immutable PercentedOf - same currency success", func(t *testing.T) {
-			m1 := NewMoneyFromFraction(1, 2, "USD") // 0.5 as exact fraction (1/2)
-			m2 := NewMoneyInt("USD", 100)           // $1.00
+		t.Run("immutable PercentedMoney - same currency success", func(t *testing.T) {
+			m1 := NewMoneyInt("USD", 100) // $1.00
+			m2 := NewMoneyInt("USD", 50)  // 50 (as percentage rate)
 
-			result := m1.PercentedOf(m2) // 0.5 * $1.00 = $0.50
+			result := m1.PercentedMoney(m2) // $1.00 * (50 / 100) = $0.50
 
 			assert.True(t, result.IsValid())
-			expected := NewMoneyInt("USD", 50) // 0.5 * 100 = 50 cents
+			expected := NewMoneyInt("USD", 50) // $1.00 * 0.5 = 50 cents
 			assert.True(t, result.Equal(expected))
 			// Original unchanged
-			original := NewMoneyFromFraction(1, 2, "USD")
+			original := NewMoneyInt("USD", 100)
 			assert.True(t, m1.Equal(original))
 		})
 
-		t.Run("immutable PercentedOf - different currency returns invalid", func(t *testing.T) {
-			m1 := NewMoneyFloat("USD", 0.5)
-			m2 := NewMoneyInt("EUR", 100)
+		t.Run("immutable PercentedMoney - different currency returns invalid", func(t *testing.T) {
+			m1 := NewMoneyInt("USD", 100)
+			m2 := NewMoneyInt("EUR", 50)
 
-			result := m1.PercentedOf(m2)
+			result := m1.PercentedMoney(m2)
 
 			assert.True(t, result.IsInvalid())
 			// Original unchanged

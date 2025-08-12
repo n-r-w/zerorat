@@ -4,13 +4,6 @@ import (
 	"github.com/n-r-w/zerorat"
 )
 
-const (
-	// percentDivisor is used to convert percentage values to fractions (value/100).
-	percentDivisor = 100
-	// percentDivisorFloat is used to convert percentage values to decimals (value/100.0).
-	percentDivisorFloat = 100.0
-)
-
 // Add adds another Money to this Money (mutable operation).
 // Requires same currency. Sets invalid state on currency mismatch or invalid operands.
 // Uses pointer receiver for mutable operation.
@@ -117,15 +110,16 @@ func (m Money) Profited(other Money) Money {
 	return m.Subtracted(other)
 }
 
-// PercentInt calculates percentage of this Money using an int64 value (mutable operation).
+// Percent calculates percentage of this Money using a zerorat.Rat value (mutable operation).
 // Formula: m = m * (value / 100). Uses pointer receiver for mutable operation.
-func (m *Money) PercentInt(value int64) error {
+func (m *Money) Percent(value zerorat.Rat) error {
 	if m.IsInvalid() {
 		return ErrMoneyInvalid
 	}
 
+	const percentDivisor = 100
 	// Convert percentage to fraction: value/100
-	percentRat := zerorat.New(value, percentDivisor)
+	percentRat := value.Divided(zerorat.NewFromInt(percentDivisor))
 
 	// Delegate to Rat arithmetic
 	m.amount.Mul(percentRat)
@@ -137,6 +131,25 @@ func (m *Money) PercentInt(value int64) error {
 	}
 
 	return nil
+}
+
+// Percented returns percentage of this Money using a zerorat.Rat value (immutable operation without error).
+func (m Money) Percented(value zerorat.Rat) Money {
+	result, _ := m.PercentedErr(value)
+	return result
+}
+
+// PercentedErr returns percentage of this Money using a zerorat.Rat value (immutable operation with error).
+func (m Money) PercentedErr(value zerorat.Rat) (Money, error) {
+	result := m // copy
+	err := result.Percent(value)
+	return result, err
+}
+
+// PercentInt calculates percentage of this Money using an int64 value (mutable operation).
+// Formula: m = m * (value / 100). Uses pointer receiver for mutable operation.
+func (m *Money) PercentInt(value int64) error {
+	return m.Percent(zerorat.NewFromInt(value))
 }
 
 // PercentIntErr returns percentage of this Money using an int64 value (immutable operation with error).
@@ -157,30 +170,7 @@ func (m Money) PercentedInt(value int64) Money {
 // PercentFloat calculates percentage of this Money using a float64 value (mutable operation).
 // Formula: m = m * (value / 100). Uses pointer receiver for mutable operation.
 func (m *Money) PercentFloat(value float64) error {
-	if m.IsInvalid() {
-		return ErrMoneyInvalid
-	}
-
-	// Convert percentage to decimal: value/100
-	percentFloat := value / percentDivisorFloat
-	percentRat := zerorat.NewFromFloat64(percentFloat)
-
-	// Check if float conversion was invalid
-	if percentRat.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	// Delegate to Rat arithmetic
-	m.amount.Mul(percentRat)
-
-	// Check if Rat operation resulted in invalid state
-	if m.amount.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	return nil
+	return m.Percent(zerorat.NewFromFloat64(value))
 }
 
 // PercentFloatErr returns percentage of this Money using a float64 value (immutable operation with error).
@@ -198,10 +188,10 @@ func (m Money) PercentedFloat(value float64) Money {
 	return result
 }
 
-// PercentOf calculates this Money as percentage of another Money (mutable operation).
-// Formula: m = m * other (interpreted as proportion). Requires same currency.
+// PercentMoney calculates this Money as percentage of another Money (mutable operation).
+// Formula: m = m * (other / 100). Requires same currency.
 // Uses pointer receiver for mutable operation.
-func (m *Money) PercentOf(other Money) error {
+func (m *Money) PercentMoney(other Money) error {
 	// Check if either operand is invalid
 	if m.IsInvalid() || other.IsInvalid() {
 		m.Invalidate()
@@ -214,30 +204,21 @@ func (m *Money) PercentOf(other Money) error {
 		return ErrMoneyCurrencyMismatch
 	}
 
-	// Delegate to Rat arithmetic
-	m.amount.Mul(other.amount)
-
-	// Check if Rat operation resulted in invalid state
-	if m.amount.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	return nil
+	return m.Percent(other.amount)
 }
 
-// PercentOfErr returns this Money as percentage of another Money (immutable operation with error).
+// PercentMoneyErr returns this Money as percentage of another Money (immutable operation with error).
 // Uses value receiver for immutable operation.
-func (m Money) PercentOfErr(other Money) (Money, error) {
+func (m Money) PercentMoneyErr(other Money) (Money, error) {
 	result := m // copy
-	err := result.PercentOf(other)
+	err := result.PercentMoney(other)
 	return result, err
 }
 
-// PercentedOf returns this Money as percentage of another Money (immutable operation without error).
+// PercentedMoney returns this Money as percentage of another Money (immutable operation without error).
 // Returns invalid Money on error. Uses value receiver for immutable operation.
-func (m Money) PercentedOf(other Money) Money {
-	result, _ := m.PercentOfErr(other)
+func (m Money) PercentedMoney(other Money) Money {
+	result, _ := m.PercentMoneyErr(other)
 	return result
 }
 

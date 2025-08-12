@@ -8,13 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMoneyMulMoney tests Mul operations with Money operands
-func TestMoneyMulMoney(t *testing.T) {
-	t.Run("mutable MulMoney - same currency success", func(t *testing.T) {
+// TestMoneyMul tests Mul operations with Money operands
+func TestMoneyMul(t *testing.T) {
+	t.Run("mutable Mul - same currency success", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100) // $1.00
 		m2 := NewMoneyInt("USD", 2)   // $0.02
 
-		err := m1.MulMoney(m2)
+		err := m1.Mul(m2)
 
 		require.NoError(t, err)
 		assert.True(t, m1.IsValid())
@@ -23,33 +23,33 @@ func TestMoneyMulMoney(t *testing.T) {
 		assert.True(t, m1.Equal(expected))
 	})
 
-	t.Run("mutable MulMoney - different currency failure", func(t *testing.T) {
+	t.Run("mutable Mul - different currency failure", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("EUR", 2)
 
-		err := m1.MulMoney(m2)
+		err := m1.Mul(m2)
 
 		require.Error(t, err)
 		assert.Equal(t, ErrMoneyCurrencyMismatch, err)
 		assert.True(t, m1.IsInvalid(), "Money should be invalid after currency mismatch")
 	})
 
-	t.Run("mutable MulMoney - invalid operand", func(t *testing.T) {
+	t.Run("mutable Mul - invalid operand", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("", 2) // invalid
 
-		err := m1.MulMoney(m2)
+		err := m1.Mul(m2)
 
 		require.Error(t, err)
 		assert.Equal(t, ErrMoneyInvalid, err)
 		assert.True(t, m1.IsInvalid(), "Money should be invalid after multiplying by invalid operand")
 	})
 
-	t.Run("mutable MulMoney - zero operand", func(t *testing.T) {
+	t.Run("mutable Mul - zero operand", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := ZeroMoney("USD")
 
-		err := m1.MulMoney(m2)
+		err := m1.Mul(m2)
 
 		require.NoError(t, err)
 		assert.True(t, m1.IsValid())
@@ -57,11 +57,11 @@ func TestMoneyMulMoney(t *testing.T) {
 		assert.True(t, m1.Equal(expected))
 	})
 
-	t.Run("immutable MultipliedMoneyErr - same currency success", func(t *testing.T) {
+	t.Run("immutable MultipliedErr - same currency success", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("USD", 2)
 
-		result, err := m1.MultipliedMoneyErr(m2)
+		result, err := m1.MultipliedErr(m2)
 
 		require.NoError(t, err)
 		assert.True(t, result.IsValid())
@@ -72,11 +72,11 @@ func TestMoneyMulMoney(t *testing.T) {
 		assert.True(t, m1.Equal(NewMoneyInt("USD", 100)))
 	})
 
-	t.Run("immutable MultipliedMoneyErr - different currency failure", func(t *testing.T) {
+	t.Run("immutable MultipliedErr - different currency failure", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("EUR", 2)
 
-		result, err := m1.MultipliedMoneyErr(m2)
+		result, err := m1.MultipliedErr(m2)
 
 		require.Error(t, err)
 		assert.Equal(t, ErrMoneyCurrencyMismatch, err)
@@ -85,11 +85,11 @@ func TestMoneyMulMoney(t *testing.T) {
 		assert.True(t, m1.IsValid())
 	})
 
-	t.Run("immutable MultipliedMoney - same currency success", func(t *testing.T) {
+	t.Run("immutable Multiplied - same currency success", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("USD", 2)
 
-		result := m1.MultipliedMoney(m2)
+		result := m1.Multiplied(m2)
 
 		assert.True(t, result.IsValid())
 		assert.Equal(t, "USD", result.Currency())
@@ -99,11 +99,11 @@ func TestMoneyMulMoney(t *testing.T) {
 		assert.True(t, m1.Equal(NewMoneyInt("USD", 100)))
 	})
 
-	t.Run("immutable MultipliedMoney - different currency returns invalid", func(t *testing.T) {
+	t.Run("immutable Multiplied - different currency returns invalid", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("EUR", 2)
 
-		result := m1.MultipliedMoney(m2)
+		result := m1.Multiplied(m2)
 
 		assert.True(t, result.IsInvalid(), "Result should be invalid on currency mismatch")
 		// Original should be unchanged
@@ -111,13 +111,13 @@ func TestMoneyMulMoney(t *testing.T) {
 	})
 }
 
-// TestMoneyDivMoney tests Div operations with Money operands
-func TestMoneyDivMoney(t *testing.T) {
-	t.Run("mutable DivMoney - same currency success", func(t *testing.T) {
+// TestMoneyDiv tests Div operations with Money operands
+func TestMoneyDiv(t *testing.T) {
+	t.Run("mutable Div - same currency success", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100) // $1.00
 		m2 := NewMoneyInt("USD", 2)   // $0.02
 
-		err := m1.DivMoney(m2)
+		err := m1.Div(m2)
 
 		require.NoError(t, err)
 		assert.True(t, m1.IsValid())
@@ -126,44 +126,44 @@ func TestMoneyDivMoney(t *testing.T) {
 		assert.True(t, m1.Equal(expected))
 	})
 
-	t.Run("mutable DivMoney - different currency failure", func(t *testing.T) {
+	t.Run("mutable Div - different currency failure", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("EUR", 2)
 
-		err := m1.DivMoney(m2)
+		err := m1.Div(m2)
 
 		require.Error(t, err)
 		assert.Equal(t, ErrMoneyCurrencyMismatch, err)
 		assert.True(t, m1.IsInvalid(), "Money should be invalid after currency mismatch")
 	})
 
-	t.Run("mutable DivMoney - division by zero", func(t *testing.T) {
+	t.Run("mutable Div - division by zero", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := ZeroMoney("USD")
 
-		err := m1.DivMoney(m2)
+		err := m1.Div(m2)
 
 		require.Error(t, err)
 		assert.Equal(t, ErrMoneyInvalid, err)
 		assert.True(t, m1.IsInvalid(), "Money should be invalid after division by zero")
 	})
 
-	t.Run("mutable DivMoney - invalid operand", func(t *testing.T) {
+	t.Run("mutable Div - invalid operand", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("", 2) // invalid
 
-		err := m1.DivMoney(m2)
+		err := m1.Div(m2)
 
 		require.Error(t, err)
 		assert.Equal(t, ErrMoneyInvalid, err)
 		assert.True(t, m1.IsInvalid(), "Money should be invalid after dividing by invalid operand")
 	})
 
-	t.Run("immutable DividedMoneyErr - same currency success", func(t *testing.T) {
+	t.Run("immutable DividedErr - same currency success", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("USD", 2)
 
-		result, err := m1.DividedMoneyErr(m2)
+		result, err := m1.DividedErr(m2)
 
 		require.NoError(t, err)
 		assert.True(t, result.IsValid())
@@ -174,11 +174,11 @@ func TestMoneyDivMoney(t *testing.T) {
 		assert.True(t, m1.Equal(NewMoneyInt("USD", 100)))
 	})
 
-	t.Run("immutable DividedMoneyErr - division by zero", func(t *testing.T) {
+	t.Run("immutable DividedErr - division by zero", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := ZeroMoney("USD")
 
-		result, err := m1.DividedMoneyErr(m2)
+		result, err := m1.DividedErr(m2)
 
 		require.Error(t, err)
 		assert.Equal(t, ErrMoneyInvalid, err)
@@ -187,11 +187,11 @@ func TestMoneyDivMoney(t *testing.T) {
 		assert.True(t, m1.IsValid())
 	})
 
-	t.Run("immutable DividedMoney - same currency success", func(t *testing.T) {
+	t.Run("immutable Divided - same currency success", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("USD", 2)
 
-		result := m1.DividedMoney(m2)
+		result := m1.Divided(m2)
 
 		assert.True(t, result.IsValid())
 		assert.Equal(t, "USD", result.Currency())
@@ -201,22 +201,22 @@ func TestMoneyDivMoney(t *testing.T) {
 		assert.True(t, m1.Equal(NewMoneyInt("USD", 100)))
 	})
 
-	t.Run("immutable DividedMoney - division by zero returns invalid", func(t *testing.T) {
+	t.Run("immutable Divided - division by zero returns invalid", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := ZeroMoney("USD")
 
-		result := m1.DividedMoney(m2)
+		result := m1.Divided(m2)
 
 		assert.True(t, result.IsInvalid(), "Result should be invalid on division by zero")
 		// Original should be unchanged
 		assert.True(t, m1.IsValid())
 	})
 
-	t.Run("immutable DividedMoney - different currency returns invalid", func(t *testing.T) {
+	t.Run("immutable Divided - different currency returns invalid", func(t *testing.T) {
 		m1 := NewMoneyInt("USD", 100)
 		m2 := NewMoneyInt("EUR", 2)
 
-		result := m1.DividedMoney(m2)
+		result := m1.Divided(m2)
 
 		assert.True(t, result.IsInvalid(), "Result should be invalid on currency mismatch")
 		// Original should be unchanged
