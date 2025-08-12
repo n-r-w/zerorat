@@ -128,3 +128,8 @@ func (m Money) GreaterErr(other Money) (bool, error) {
 	// Delegate to underlying Rat comparison
 	return m.amount.Compare(other.amount) > 0, nil
 }
+
+// IsZero checks if the Money represents a zero value.
+func (m Money) IsZero() bool {
+	return m.IsValid() && m.amount.IsZero()
+}

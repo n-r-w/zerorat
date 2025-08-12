@@ -3,6 +3,7 @@ package money
 import (
 	"testing"
 
+	"github.com/n-r-w/zerorat"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -347,5 +348,192 @@ func TestMoney_ComparisonEdgeCases(t *testing.T) {
 			assert.True(t, money2.Greater(money1), "Greater should work for currency: %s", currency)
 			assert.False(t, money1.Equal(money2), "Equal should work for currency: %s", currency)
 		}
+	})
+}
+
+// TestMoney_IsZero tests the IsZero method
+func TestMoney_IsZero(t *testing.T) {
+	t.Run("valid zero money", func(t *testing.T) {
+		t.Run("zero from ZeroMoney constructor", func(t *testing.T) {
+			m := ZeroMoney("USD")
+
+			result := m.IsZero()
+
+			assert.True(t, result, "ZeroMoney should return true for IsZero")
+		})
+
+		t.Run("zero from NewMoneyInt with 0", func(t *testing.T) {
+			m := NewMoneyInt("EUR", 0)
+
+			result := m.IsZero()
+
+			assert.True(t, result, "NewMoneyInt with 0 should return true for IsZero")
+		})
+
+		t.Run("zero from NewMoneyFromFraction with 0 numerator", func(t *testing.T) {
+			m := NewMoneyFromFraction(0, 100, "JPY")
+
+			result := m.IsZero()
+
+			assert.True(t, result, "NewMoneyFromFraction with 0 numerator should return true for IsZero")
+		})
+
+		t.Run("zero from NewMoneyFloat with 0.0", func(t *testing.T) {
+			m := NewMoneyFloat("GBP", 0.0)
+
+			result := m.IsZero()
+
+			assert.True(t, result, "NewMoneyFloat with 0.0 should return true for IsZero")
+		})
+
+		t.Run("zero from NewMoney with zerorat.Zero", func(t *testing.T) {
+			m := NewMoney("CHF", zerorat.Zero())
+
+			result := m.IsZero()
+
+			assert.True(t, result, "NewMoney with zerorat.Zero should return true for IsZero")
+		})
+	})
+
+	t.Run("valid non-zero money", func(t *testing.T) {
+		t.Run("positive integer", func(t *testing.T) {
+			m := NewMoneyInt("USD", 100)
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Positive money should return false for IsZero")
+		})
+
+		t.Run("negative integer", func(t *testing.T) {
+			m := NewMoneyInt("USD", -100)
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Negative money should return false for IsZero")
+		})
+
+		t.Run("positive fraction", func(t *testing.T) {
+			m := NewMoneyFromFraction(1, 2, "EUR") // 0.5
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Positive fractional money should return false for IsZero")
+		})
+
+		t.Run("negative fraction", func(t *testing.T) {
+			m := NewMoneyFromFraction(-3, 4, "JPY") // -0.75
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Negative fractional money should return false for IsZero")
+		})
+
+		t.Run("positive float", func(t *testing.T) {
+			m := NewMoneyFloat("GBP", 1.23)
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Positive float money should return false for IsZero")
+		})
+
+		t.Run("negative float", func(t *testing.T) {
+			m := NewMoneyFloat("CHF", -2.50)
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Negative float money should return false for IsZero")
+		})
+	})
+	t.Run("invalid money", func(t *testing.T) {
+		t.Run("default zero-value Money", func(t *testing.T) {
+			m := Money{}
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Invalid Money (zero-value) should return false for IsZero")
+		})
+
+		t.Run("money with empty currency", func(t *testing.T) {
+			m := NewMoneyInt("", 0) // invalid due to empty currency
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Money with empty currency should return false for IsZero")
+		})
+
+		t.Run("money with invalid amount", func(t *testing.T) {
+			invalidAmount := zerorat.New(1, 0) // invalid Rat (denominator = 0)
+			m := NewMoney("USD", invalidAmount)
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Money with invalid amount should return false for IsZero")
+		})
+
+		t.Run("invalidated money", func(t *testing.T) {
+			m := NewMoneyInt("USD", 0) // start with valid zero money
+			assert.True(t, m.IsZero(), "Should be zero before invalidation")
+
+			m.Invalidate() // make it invalid
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Invalidated money should return false for IsZero")
+		})
+	})
+
+	t.Run("edge cases", func(t *testing.T) {
+		t.Run("very small positive fraction", func(t *testing.T) {
+			m := NewMoneyFromFraction(1, 1000000, "USD") // 0.000001
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Very small positive fraction should return false for IsZero")
+		})
+
+		t.Run("very small negative fraction", func(t *testing.T) {
+			m := NewMoneyFromFraction(-1, 1000000, "USD") // -0.000001
+
+			result := m.IsZero()
+
+			assert.False(t, result, "Very small negative fraction should return false for IsZero")
+		})
+
+		t.Run("different currencies with zero", func(t *testing.T) {
+			currencies := []string{"USD", "EUR", "JPY", "GBP", "CHF", "CAD", "AUD"}
+
+			for _, currency := range currencies {
+				m := ZeroMoney(currency)
+
+				result := m.IsZero()
+
+				assert.True(t, result, "Zero money should return true for IsZero regardless of currency: %s", currency)
+			}
+		})
+
+		t.Run("reduced fraction that equals zero", func(t *testing.T) {
+			// This creates 0/4 which should reduce to 0/1 (zero)
+			m := NewMoneyFromFraction(0, 4, "USD")
+
+			result := m.IsZero()
+
+			assert.True(t, result, "Reduced fraction equal to zero should return true for IsZero")
+		})
+	})
+
+	t.Run("consistency with underlying zerorat", func(t *testing.T) {
+		t.Run("zero money amount should be zero", func(t *testing.T) {
+			m := ZeroMoney("USD")
+
+			assert.True(t, m.IsZero(), "Money should be zero")
+			assert.True(t, m.Amount().IsZero(), "Underlying amount should also be zero")
+		})
+
+		t.Run("non-zero money amount should not be zero", func(t *testing.T) {
+			m := NewMoneyInt("USD", 100)
+
+			assert.False(t, m.IsZero(), "Money should not be zero")
+			assert.False(t, m.Amount().IsZero(), "Underlying amount should also not be zero")
+		})
 	})
 }
