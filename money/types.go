@@ -28,56 +28,113 @@ var (
 	ErrMoneyCurrencyMismatch = errors.New("money currency mismatch")
 )
 
+// NewInvalid creates a new invalid Money value.
+func NewInvalid() Money {
+	return Money{}
+}
+
 // NewMoney creates a new Money with the given currency and amount.
 // Returns a value, not a pointer, following project preferences.
 // The Money is invalid if currency is empty or amount is invalid.
 // The amount is automatically reduced if needed by the zerorat constructor.
 func NewMoney(currency Currency, amount zerorat.Rat) Money {
+	m, _ := NewMoneyErr(currency, amount)
+	return m
+}
+
+// NewMoneyErr creates a new Money with the given currency and amount.
+// Returns a value, not a pointer, following project preferences.
+// The Money is invalid if currency is empty or amount is invalid.
+// The amount is automatically reduced if needed by the zerorat constructor.
+func NewMoneyErr(currency Currency, amount zerorat.Rat) (Money, error) {
 	// If currency is empty, return invalid Money
 	if currency == "" {
-		return Money{} // invalid: empty currency and zero-value Rat (which has denominator=0)
+		return Money{}, ErrMoneyInvalid // invalid: empty currency and zero-value Rat (which has denominator=0)
 	}
 
 	// If amount is invalid, return invalid Money
 	if amount.IsInvalid() {
-		return Money{} // invalid: empty currency and invalid Rat
+		return Money{}, ErrMoneyInvalid // invalid: empty currency and invalid Rat
 	}
 
 	// Create valid Money - amount is already reduced by zerorat constructor
 	return Money{
 		currency: currency,
 		amount:   amount,
-	}
+	}, nil
 }
 
 // NewMoneyInt creates a Money from an integer value.
 // Equivalent to NewMoney(currency, zerorat.NewFromInt(value)).
 func NewMoneyInt(currency Currency, value int64) Money {
+	m, _ := NewMoneyIntErr(currency, value)
+	return m
+}
+
+// NewMoneyIntErr creates a Money from an integer value.
+// Equivalent to NewMoney(currency, zerorat.NewFromInt(value)).
+func NewMoneyIntErr(currency Currency, value int64) (Money, error) {
+	// If currency is empty, return invalid Money
+	if currency == "" {
+		return Money{}, nil // invalid: empty currency and zero-value Rat (which has denominator=0)
+	}
+
 	amount := zerorat.NewFromInt(value)
-	return NewMoney(currency, amount)
+	return NewMoneyErr(currency, amount)
 }
 
 // NewMoneyFloat creates a Money from a float64 value.
 // Returns invalid Money if currency is empty or float conversion fails.
 // Equivalent to NewMoney(currency, zerorat.NewFromFloat64(value)).
 func NewMoneyFloat(currency Currency, value float64) Money {
+	m, _ := NewMoneyFloatErr(currency, value)
+	return m
+}
+
+// NewMoneyFloatErr creates a Money from a float64 value.
+// Returns invalid Money if currency is empty or float conversion fails.
+// Equivalent to NewMoney(currency, zerorat.NewFromFloat64(value)).
+func NewMoneyFloatErr(currency Currency, value float64) (Money, error) {
 	amount := zerorat.NewFromFloat64(value)
-	return NewMoney(currency, amount)
+	if amount.IsInvalid() {
+		return Money{}, ErrMoneyInvalid
+	}
+
+	return NewMoneyErr(currency, amount)
 }
 
 // NewMoneyFromFraction creates a Money from a fraction (numerator/denominator).
 // Returns invalid Money if currency is empty or denominator is zero.
 // The fraction is automatically reduced by the zerorat constructor.
 func NewMoneyFromFraction(numerator int64, denominator uint64, currency Currency) Money {
+	m, _ := NewMoneyFromFractionErr(numerator, denominator, currency)
+	return m
+}
+
+// NewMoneyFromFractionErr creates a Money from a fraction (numerator/denominator).
+// Returns invalid Money if currency is empty or denominator is zero.
+// The fraction is automatically reduced by the zerorat constructor.
+func NewMoneyFromFractionErr(numerator int64, denominator uint64, currency Currency) (Money, error) {
+	if currency == "" {
+		return Money{}, ErrMoneyInvalid
+	}
+
 	amount := zerorat.New(numerator, denominator)
-	return NewMoney(currency, amount)
+	return NewMoneyErr(currency, amount)
 }
 
 // ZeroMoney creates a Money representing zero in the given currency.
 // Returns invalid Money if currency is empty.
 func ZeroMoney(currency Currency) Money {
+	m, _ := ZeroMoneyErr(currency)
+	return m
+}
+
+// ZeroMoneyErr creates a Money representing zero in the given currency.
+// Returns invalid Money if currency is empty.
+func ZeroMoneyErr(currency Currency) (Money, error) {
 	amount := zerorat.Zero()
-	return NewMoney(currency, amount)
+	return NewMoneyErr(currency, amount)
 }
 
 // IsValid checks if the Money is in a valid state.
