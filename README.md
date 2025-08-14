@@ -3,6 +3,7 @@
 [![CI](https://github.com/n-r-w/zerorat/actions/workflows/ci.yml/badge.svg)](https://github.com/n-r-w/zerorat/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/n-r-w/zerorat/branch/main/graph/badge.svg)](https://codecov.io/gh/n-r-w/zerorat)
 [![Go Report Card](https://goreportcard.com/badge/github.com/n-r-w/zerorat)](https://goreportcard.com/report/github.com/n-r-w/zerorat)
+[![GoDoc](https://pkg.go.dev/badge/github.com/n-r-w/zerorat)](https://pkg.go.dev/github.com/n-r-w/zerorat)
 
 Zero-allocation rational number library for Go, providing big.Rat-like functionality without heap allocations.
 
