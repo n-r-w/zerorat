@@ -3,6 +3,9 @@ package zerorat
 import (
 	"math"
 	"math/bits"
+	"reflect"
+
+	"github.com/go-playground/validator/v10"
 )
 
 // willOverflowUint64Mul checks if multiplying two uint64 values would overflow.
@@ -340,4 +343,14 @@ func roundDivision(numerator int64, denominator uint64, roundType RoundType) int
 	default:
 		return quotient
 	}
+}
+
+// RegisterValidationFunc registers a custom validation function for Rat types.
+func RegisterValidationFunc(v *validator.Validate) {
+	v.RegisterCustomTypeFunc(func(field reflect.Value) any {
+		if r, ok := field.Interface().(Rat); ok {
+			return r.IsValid()
+		}
+		return nil
+	}, Rat{})
 }

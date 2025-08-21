@@ -81,6 +81,13 @@ err := usd.Add(eur)                           // returns ErrMoneyCurrencyMismatc
 fmt.Println(price.String())                   // "USD 12.99"
 ```
 
+## Validation support
+
+zerorat and money packages support validation via github.com/go-playground/validator/v10.
+There are two validation functions available:
+- zerorat.RegisterValidationFunc
+- money.RegisterValidationFunc
+
 ## Performance vs big.Rat
 
 | Operation | ZeroRat | big.Rat | Speedup |
