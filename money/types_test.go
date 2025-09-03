@@ -54,7 +54,7 @@ func TestNewMoneyInt(t *testing.T) {
 
 		assert.True(t, m.IsValid(), "Money should be valid")
 		assert.Equal(t, "EUR", m.Currency(), "Currency should match")
-		expected := zerorat.NewFromInt(42)
+		expected := zerorat.NewFromInt64(42)
 		actualAmount := m.Amount()
 		assert.True(t, actualAmount.Equal(expected), "Amount should match")
 	})
@@ -64,7 +64,7 @@ func TestNewMoneyInt(t *testing.T) {
 
 		assert.True(t, m.IsValid(), "Money should be valid")
 		assert.Equal(t, "JPY", m.Currency(), "Currency should match")
-		expected := zerorat.NewFromInt(-100)
+		expected := zerorat.NewFromInt64(-100)
 		actualAmount := m.Amount()
 		assert.True(t, actualAmount.Equal(expected), "Amount should match")
 	})

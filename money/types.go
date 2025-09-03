@@ -71,6 +71,22 @@ func NewMoneyInt(currency Currency, value int64) Money {
 	return m
 }
 
+// NewMoneyInt64Ptr creates a Money from an integer pointer.
+func NewMoneyInt64Ptr(currency Currency, value *int64) Money {
+	if value == nil {
+		return Money{}
+	}
+	return NewMoneyInt(currency, *value)
+}
+
+// NewMoneyIntPtr creates a Money from an integer pointer.
+func NewMoneyIntPtr(currency Currency, value *int) Money {
+	if value == nil {
+		return Money{}
+	}
+	return NewMoneyInt(currency, int64(*value))
+}
+
 // NewMoneyIntErr creates a Money from an integer value.
 // Equivalent to NewMoney(currency, zerorat.NewFromInt(value)).
 func NewMoneyIntErr(currency Currency, value int64) (Money, error) {
@@ -79,7 +95,7 @@ func NewMoneyIntErr(currency Currency, value int64) (Money, error) {
 		return Money{}, nil // invalid: empty currency and zero-value Rat (which has denominator=0)
 	}
 
-	amount := zerorat.NewFromInt(value)
+	amount := zerorat.NewFromInt64(value)
 	return NewMoneyErr(currency, amount)
 }
 
@@ -89,6 +105,22 @@ func NewMoneyIntErr(currency Currency, value int64) (Money, error) {
 func NewMoneyFloat(currency Currency, value float64) Money {
 	m, _ := NewMoneyFloatErr(currency, value)
 	return m
+}
+
+// NewMoneyFloat64Ptr creates a Money from a float64 pointer.
+func NewMoneyFloat64Ptr(currency Currency, value *float64) Money {
+	if value == nil {
+		return Money{}
+	}
+	return NewMoneyFloat(currency, *value)
+}
+
+// NewMoneyFloat32Ptr creates a Money from a float32 pointer.
+func NewMoneyFloat32Ptr(currency Currency, value *float32) Money {
+	if value == nil {
+		return Money{}
+	}
+	return NewMoneyFloat(currency, float64(*value))
 }
 
 // NewMoneyFloatErr creates a Money from a float64 value.
@@ -184,20 +216,29 @@ func SameCurrency(a, b Money) bool {
 // SameCurrencies is a convenience function that checks if all Money values have the same currency.
 // Returns true if all Money values are valid and have matching currencies.
 func SameCurrencies(moneys ...Money) bool {
-	if len(moneys) == 0 {
-		return true
+	ok, err := SameCurrenciesErr(moneys...)
+	return err == nil && ok
+}
+
+// SameCurrenciesErr is a convenience function that checks if all Money values have the same currency.
+func SameCurrenciesErr(moneys ...Money) (bool, error) {
+	//  check for invalid operands
+	for _, m := range moneys {
+		if m.IsInvalid() {
+			return false, ErrMoneyInvalid
+		}
 	}
 
-	if len(moneys) == 1 {
-		return moneys[0].IsValid()
+	if len(moneys) <= 1 {
+		return true, nil
 	}
 
 	for i := 1; i < len(moneys); i++ {
 		if !hasSameCurrency(moneys[0], moneys[i]) {
-			return false
+			return false, nil
 		}
 	}
-	return true
+	return true, nil
 }
 
 // IsNegative checks if the Money represents a negative value.
@@ -219,4 +260,104 @@ func (m Money) IsPositive() bool {
 // Uses value receiver as this is an immutable operation.
 func (m Money) IsEmpty() bool {
 	return m.IsInvalid()
+}
+
+// ToInt64Err converts the monetary amount to an int64 with error handling.
+// Returns ErrMoneyInvalid if the Money value is invalid.
+func (m Money) ToInt64Err() (int64, error) {
+	if m.IsInvalid() {
+		return 0, ErrMoneyInvalid
+	}
+	return m.amount.ToInt64Err()
+}
+
+// ToInt64 converts the monetary amount to an int64.
+// Returns 0 if the Money value is invalid.
+func (m Money) ToInt64() int64 {
+	result, _ := m.ToInt64Err()
+	return result
+}
+
+// ToIntErr converts the monetary amount to an int with error handling.
+// Returns ErrMoneyInvalid if the Money value is invalid.
+func (m Money) ToIntErr() (int, error) {
+	if m.IsInvalid() {
+		return 0, ErrMoneyInvalid
+	}
+	return m.amount.ToIntErr()
+}
+
+// ToInt converts the monetary amount to an int.
+// Returns 0 if the Money value is invalid.
+func (m Money) ToInt() int {
+	result, _ := m.ToIntErr()
+	return result
+}
+
+// ToInt64Ptr converts the monetary amount to an int64 pointer.
+func (m Money) ToInt64Ptr() *int64 {
+	if m.IsInvalid() {
+		return nil
+	}
+	result := m.ToInt64()
+	return &result
+}
+
+// ToIntPtr converts the monetary amount to an int pointer.
+func (m Money) ToIntPtr() *int {
+	if m.IsInvalid() {
+		return nil
+	}
+	result := m.ToInt()
+	return &result
+}
+
+// ToFloat64Err converts the monetary amount to a float64 with error handling.
+// Returns ErrMoneyInvalid if the Money value is invalid.
+func (m Money) ToFloat64Err() (float64, error) {
+	if m.IsInvalid() {
+		return 0, ErrMoneyInvalid
+	}
+	return m.amount.ToFloat64Err()
+}
+
+// ToFloat64 converts the monetary amount to a float64.
+// Returns 0 if the Money value is invalid.
+func (m Money) ToFloat64() float64 {
+	result, _ := m.ToFloat64Err()
+	return result
+}
+
+// ToFloat32Err converts the monetary amount to a float32 with error handling.
+// Returns ErrMoneyInvalid if the Money value is invalid.
+func (m Money) ToFloat32Err() (float32, error) {
+	if m.IsInvalid() {
+		return 0, ErrMoneyInvalid
+	}
+	return m.amount.ToFloat32Err()
+}
+
+// ToFloat32 converts the monetary amount to a float32.
+// Returns 0 if the Money value is invalid.
+func (m Money) ToFloat32() float32 {
+	result, _ := m.ToFloat32Err()
+	return result
+}
+
+// ToFloat32Ptr converts the monetary amount to a float32 pointer.
+func (m Money) ToFloat32Ptr() *float32 {
+	if m.IsInvalid() {
+		return nil
+	}
+	result := m.ToFloat32()
+	return &result
+}
+
+// ToFloat64Ptr converts the monetary amount to a float64 pointer.
+func (m Money) ToFloat64Ptr() *float64 {
+	if m.IsInvalid() {
+		return nil
+	}
+	result := m.ToFloat64()
+	return &result
 }

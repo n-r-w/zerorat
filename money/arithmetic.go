@@ -119,7 +119,7 @@ func (m *Money) Percent(value zerorat.Rat) error {
 
 	const percentDivisor = 100
 	// Convert percentage to fraction: value/100
-	percentRat := value.Divided(zerorat.NewFromInt(percentDivisor))
+	percentRat := value.Divided(zerorat.NewFromInt64(percentDivisor))
 
 	// Delegate to Rat arithmetic
 	m.amount.Mul(percentRat)
@@ -149,7 +149,7 @@ func (m Money) PercentedErr(value zerorat.Rat) (Money, error) {
 // PercentInt calculates percentage of this Money using an int64 value (mutable operation).
 // Formula: m = m * (value / 100). Uses pointer receiver for mutable operation.
 func (m *Money) PercentInt(value int64) error {
-	return m.Percent(zerorat.NewFromInt(value))
+	return m.Percent(zerorat.NewFromInt64(value))
 }
 
 // PercentIntErr returns percentage of this Money using an int64 value (immutable operation with error).
@@ -230,7 +230,7 @@ func (m *Money) AddInt(value int64) error {
 	}
 
 	// Convert int64 to Rat
-	ratValue := zerorat.NewFromInt(value)
+	ratValue := zerorat.NewFromInt64(value)
 
 	// Delegate to Rat arithmetic
 	m.amount.Add(ratValue)
@@ -305,7 +305,7 @@ func (m *Money) SubInt(value int64) error {
 	}
 
 	// Convert int64 to Rat
-	ratValue := zerorat.NewFromInt(value)
+	ratValue := zerorat.NewFromInt64(value)
 
 	// Delegate to Rat arithmetic
 	m.amount.Sub(ratValue)
@@ -379,7 +379,7 @@ func (m *Money) MulInt(value int64) error {
 	}
 
 	// Convert int64 to Rat
-	ratValue := zerorat.NewFromInt(value)
+	ratValue := zerorat.NewFromInt64(value)
 
 	// Delegate to Rat arithmetic
 	m.amount.Mul(ratValue)
@@ -459,7 +459,7 @@ func (m *Money) DivInt(value int64) error {
 	}
 
 	// Convert int64 to Rat
-	ratValue := zerorat.NewFromInt(value)
+	ratValue := zerorat.NewFromInt64(value)
 
 	// Delegate to Rat arithmetic
 	m.amount.Div(ratValue)
@@ -554,4 +554,24 @@ func SumErr(moneys ...Money) (Money, error) {
 		}
 	}
 	return result, nil
+}
+
+// HasFractional checks if the Money represents a fractional value.
+func (m Money) HasFractional() bool {
+	return m.amount.HasFractional()
+}
+
+// IntegerPart returns the integer part of the Money amount.
+func (m Money) IntegerPart() int64 {
+	return m.amount.IntegerPart()
+}
+
+// FractionalPart returns the fractional part of the Money amount.
+func (m Money) FractionalPart() zerorat.Rat {
+	return m.amount.FractionalPart()
+}
+
+// IntegerAndFraction returns the integer and fractional parts of the Money amount.
+func (m Money) IntegerAndFraction() (int64, zerorat.Rat) {
+	return m.amount.IntegerAndFraction()
 }

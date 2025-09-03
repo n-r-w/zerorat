@@ -1384,3 +1384,396 @@ func TestRat_FloatArithmetic_EdgeCases(t *testing.T) {
 		assert.True(t, r.IsInvalid(), "DivFloat by zero should result in invalid state")
 	})
 }
+
+// TestRat_Invert tests the mutable Invert method
+func TestRat_Invert(t *testing.T) {
+	t.Run("basic inversion", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "positive fraction",
+				receiver:  New(3, 4), // 3/4 -> 4/3
+				wantNum:   4,
+				wantDenom: 3,
+			},
+			{
+				name:      "negative fraction",
+				receiver:  New(-3, 4), // -3/4 -> -4/3
+				wantNum:   -4,
+				wantDenom: 3,
+			},
+			{
+				name:      "positive integer",
+				receiver:  New(5, 1), // 5/1 -> 1/5
+				wantNum:   1,
+				wantDenom: 5,
+			},
+			{
+				name:      "negative integer",
+				receiver:  New(-7, 1), // -7/1 -> -1/7
+				wantNum:   -1,
+				wantDenom: 7,
+			},
+			{
+				name:      "unit fraction",
+				receiver:  New(1, 3), // 1/3 -> 3/1
+				wantNum:   3,
+				wantDenom: 1,
+			},
+			{
+				name:      "negative unit fraction",
+				receiver:  New(-1, 5), // -1/5 -> -5/1
+				wantNum:   -5,
+				wantDenom: 1,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.Invert()
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch for Invert")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch for Invert")
+			})
+		}
+	})
+
+	t.Run("zero inversion", func(t *testing.T) {
+		// Test inversion of zero should result in invalid state
+		r := New(0, 1) // 0/1
+		r.Invert()
+		assert.True(t, r.IsInvalid(), "Invert of zero should result in invalid state")
+
+		r2 := New(0, 5) // 0/5
+		r2.Invert()
+		assert.True(t, r2.IsInvalid(), "Invert of zero should result in invalid state")
+	})
+
+	t.Run("invalid state propagation", func(t *testing.T) {
+		// Test that invalid state is propagated
+		invalid := New(1, 0) // invalid rational
+		invalid.Invert()
+		assert.True(t, invalid.IsInvalid(), "Invert should propagate invalid state")
+	})
+
+	t.Run("overflow edge cases", func(t *testing.T) {
+		// Test edge cases that might cause overflow
+		r := New(1, 9223372036854775807) // 1/MaxInt64 -> MaxInt64/1
+		r.Invert()
+		assert.Equal(t, int64(9223372036854775807), r.numerator, "numerator should be MaxInt64")
+		assert.Equal(t, uint64(1), r.denominator, "denominator should be 1")
+
+		// Test negative MaxInt64 case
+		r2 := New(-9223372036854775807, 1) // -MaxInt64/1 -> -1/MaxInt64
+		r2.Invert()
+		assert.Equal(t, int64(-1), r2.numerator, "numerator should be -1")
+		assert.Equal(t, uint64(9223372036854775807), r2.denominator, "denominator should be MaxInt64")
+	})
+
+	t.Run("MinInt64 special case", func(t *testing.T) {
+		// Test MinInt64 special case - this actually works fine
+		// MinInt64/1 -> -1/(MaxInt64+1) which is valid
+		r := New(-9223372036854775808, 1) // MinInt64/1
+		r.Invert()
+		assert.True(t, r.IsValid(), "Invert of MinInt64 should work fine")
+		assert.Equal(t, int64(-1), r.numerator, "numerator should be -1")
+		assert.Equal(t, uint64(9223372036854775808), r.denominator, "denominator should be MaxInt64+1")
+	})
+
+	t.Run("denominator overflow case", func(t *testing.T) {
+		// Test case where denominator is too large to become numerator
+		// This requires a denominator > MaxInt64+1, but that's not possible in our current design
+		// since we construct rationals with uint64 denominators that can all be converted to signed
+		// Let's test the theoretical case by manually creating an edge case
+
+		// Actually, let's test a case where uint64ToInt64WithSign would fail
+		// This happens when we try to convert a very large uint64 to negative int64
+		r := Rat{numerator: 1, denominator: 18446744073709551615} // MaxUint64
+		r.Invert()
+		assert.True(t, r.IsInvalid(), "Invert with MaxUint64 denominator should result in invalid state")
+	})
+}
+
+// TestRat_Inverted tests the immutable Inverted method
+func TestRat_Inverted(t *testing.T) {
+	t.Run("basic inversion", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{
+				name:      "positive fraction",
+				receiver:  New(3, 4), // 3/4 -> 4/3
+				wantNum:   4,
+				wantDenom: 3,
+			},
+			{
+				name:      "negative fraction",
+				receiver:  New(-3, 4), // -3/4 -> -4/3
+				wantNum:   -4,
+				wantDenom: 3,
+			},
+			{
+				name:      "positive integer",
+				receiver:  New(5, 1), // 5/1 -> 1/5
+				wantNum:   1,
+				wantDenom: 5,
+			},
+			{
+				name:      "negative integer",
+				receiver:  New(-7, 1), // -7/1 -> -1/7
+				wantNum:   -1,
+				wantDenom: 7,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.Inverted()
+
+				// Check the result
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+
+				// Ensure original is unchanged
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "original numerator should be unchanged")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "original denominator should be unchanged")
+			})
+		}
+	})
+
+	t.Run("zero inversion", func(t *testing.T) {
+		// Test inversion of zero should return invalid result
+		r := New(0, 1) // 0/1
+		result := r.Inverted()
+		assert.True(t, result.IsInvalid(), "Inverted of zero should return invalid result")
+		assert.True(t, r.IsValid(), "original should remain valid")
+
+		r2 := New(0, 5) // 0/5
+		result2 := r2.Inverted()
+		assert.True(t, result2.IsInvalid(), "Inverted of zero should return invalid result")
+		assert.True(t, r2.IsValid(), "original should remain valid")
+	})
+
+	t.Run("invalid state propagation", func(t *testing.T) {
+		// Test that invalid state returns invalid result
+		invalid := New(1, 0) // invalid rational
+		result := invalid.Inverted()
+		assert.True(t, result.IsInvalid(), "Inverted should return invalid result for invalid input")
+	})
+
+	t.Run("MinInt64 special case", func(t *testing.T) {
+		// Test MinInt64 special case - this actually works fine
+		r := New(-9223372036854775808, 1) // MinInt64/1
+		result := r.Inverted()
+		assert.True(t, result.IsValid(), "Inverted of MinInt64 should work fine")
+		assert.Equal(t, int64(-1), result.numerator, "result numerator should be -1")
+		assert.Equal(t, uint64(9223372036854775808), result.denominator, "result denominator should be MaxInt64+1")
+		assert.True(t, r.IsValid(), "original should remain valid")
+	})
+
+	t.Run("denominator overflow case", func(t *testing.T) {
+		// Test case where denominator is too large to become numerator
+		r := Rat{numerator: 1, denominator: 18446744073709551615} // MaxUint64
+		result := r.Inverted()
+		assert.True(t, result.IsInvalid(), "Inverted with MaxUint64 denominator should return invalid result")
+		assert.True(t, r.IsValid(), "original should remain valid")
+	})
+}
+
+// TestRat_ScaleDown tests the mutable ScaleDown method
+func TestRat_ScaleDown(t *testing.T) {
+	t.Run("basic scaling down", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			scale     int
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{"1/2 scale down 1", New(1, 2), 1, 1, 20},      // 0.5 -> 0.05
+			{"1/2 scale down 2", New(1, 2), 2, 1, 200},     // 0.5 -> 0.005
+			{"3/4 scale down 1", New(3, 4), 1, 3, 40},      // 0.75 -> 0.075
+			{"5/1 scale down 2", New(5, 1), 2, 5, 100},     // 5 -> 0.05
+			{"negative scale down", New(-7, 3), 1, -7, 30}, // -2.33... -> -0.233...
+			{"zero scale down", New(0, 1), 3, 0, 1000},     // 0 -> 0 (but denom changes)
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.ScaleDown(tt.scale)
+				assert.True(t, r.IsValid(), "result should be valid")
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			})
+		}
+	})
+
+	t.Run("zero scale does nothing", func(t *testing.T) {
+		r := New(3, 7)
+		original := r
+		r.ScaleDown(0)
+		assert.Equal(t, original.numerator, r.numerator, "numerator should be unchanged")
+		assert.Equal(t, original.denominator, r.denominator, "denominator should be unchanged")
+	})
+
+	t.Run("negative scale calls ScaleUp", func(t *testing.T) {
+		r1 := New(1, 200)
+		r2 := New(1, 200)
+
+		r1.ScaleDown(-2) // Should be equivalent to ScaleUp(2)
+		r2.ScaleUp(2)
+
+		assert.Equal(t, r2.numerator, r1.numerator, "ScaleDown(-2) should equal ScaleUp(2)")
+		assert.Equal(t, r2.denominator, r1.denominator, "ScaleDown(-2) should equal ScaleUp(2)")
+	})
+
+	t.Run("invalid state handling", func(t *testing.T) {
+		r := Rat{numerator: 1, denominator: 0} // Invalid
+		r.ScaleDown(2)
+		assert.True(t, r.IsInvalid(), "invalid input should remain invalid")
+	})
+
+	t.Run("overflow handling", func(t *testing.T) {
+		// Test denominator overflow
+		r := Rat{numerator: 1, denominator: math.MaxUint64 / 5} // Large denominator
+		r.ScaleDown(10)                                         // This should cause overflow
+		assert.True(t, r.IsInvalid(), "overflow should result in invalid state")
+	})
+}
+
+// TestRat_ScaledDown tests the immutable ScaledDown method
+func TestRat_ScaledDown(t *testing.T) {
+	t.Run("basic scaling down immutable", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			scale     int
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{"1/2 scaled down 1", New(1, 2), 1, 1, 20},
+			{"1/2 scaled down 2", New(1, 2), 2, 1, 200},
+			{"3/4 scaled down 1", New(3, 4), 1, 3, 40},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.ScaledDown(tt.scale)
+
+				// Check original is unchanged
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "original numerator should be unchanged")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "original denominator should be unchanged")
+
+				// Check result
+				assert.True(t, result.IsValid(), "result should be valid")
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+			})
+		}
+	})
+}
+
+// TestRat_ScaleUp tests the mutable ScaleUp method
+func TestRat_ScaleUp(t *testing.T) {
+	t.Run("basic scaling up", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			scale     int
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{"1/200 scale up 2", New(1, 200), 2, 100, 200}, // 0.005 -> 0.5
+			{"1/20 scale up 1", New(1, 20), 1, 10, 20},     // 0.05 -> 0.5
+			{"3/40 scale up 1", New(3, 40), 1, 30, 40},     // 0.075 -> 0.75
+			{"5/100 scale up 2", New(5, 100), 2, 100, 20},  // 0.05 -> 5 (5/100 reduces to 1/20, then 1*100/20 = 100/20 = 5)
+			{"negative scale up", New(-7, 30), 1, -70, 30}, // -0.233... -> -2.33...
+			{"zero scale up", New(0, 1000), 3, 0, 1},       // 0 -> 0 (New normalizes 0/1000 to 0/1)
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				r := tt.receiver
+				r.ScaleUp(tt.scale)
+				assert.True(t, r.IsValid(), "result should be valid")
+				assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+				assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			})
+		}
+	})
+
+	t.Run("zero scale does nothing", func(t *testing.T) {
+		r := New(3, 7)
+		original := r
+		r.ScaleUp(0)
+		assert.Equal(t, original.numerator, r.numerator, "numerator should be unchanged")
+		assert.Equal(t, original.denominator, r.denominator, "denominator should be unchanged")
+	})
+
+	t.Run("negative scale calls ScaleDown", func(t *testing.T) {
+		r1 := New(1, 2)
+		r2 := New(1, 2)
+
+		r1.ScaleUp(-2) // Should be equivalent to ScaleDown(2)
+		r2.ScaleDown(2)
+
+		assert.Equal(t, r2.numerator, r1.numerator, "ScaleUp(-2) should equal ScaleDown(2)")
+		assert.Equal(t, r2.denominator, r1.denominator, "ScaleUp(-2) should equal ScaleDown(2)")
+	})
+
+	t.Run("invalid state handling", func(t *testing.T) {
+		r := Rat{numerator: 1, denominator: 0} // Invalid
+		r.ScaleUp(2)
+		assert.True(t, r.IsInvalid(), "invalid input should remain invalid")
+	})
+
+	t.Run("overflow handling", func(t *testing.T) {
+		// Test numerator overflow
+		r := Rat{numerator: math.MaxInt64 / 5, denominator: 1} // Large numerator
+		r.ScaleUp(10)                                          // This should cause overflow
+		assert.True(t, r.IsInvalid(), "overflow should result in invalid state")
+	})
+}
+
+// TestRat_ScaledUp tests the immutable ScaledUp method
+func TestRat_ScaledUp(t *testing.T) {
+	t.Run("basic scaling up immutable", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			receiver  Rat
+			scale     int
+			wantNum   int64
+			wantDenom uint64
+		}{
+			{"1/200 scaled up 2", New(1, 200), 2, 100, 200},
+			{"1/20 scaled up 1", New(1, 20), 1, 10, 20},
+			{"3/40 scaled up 1", New(3, 40), 1, 30, 40},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				original := tt.receiver
+				result := tt.receiver.ScaledUp(tt.scale)
+
+				// Check original is unchanged
+				assert.Equal(t, original.numerator, tt.receiver.numerator, "original numerator should be unchanged")
+				assert.Equal(t, original.denominator, tt.receiver.denominator, "original denominator should be unchanged")
+
+				// Check result
+				assert.True(t, result.IsValid(), "result should be valid")
+				assert.Equal(t, tt.wantNum, result.numerator, "result numerator mismatch")
+				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
+			})
+		}
+	})
+}

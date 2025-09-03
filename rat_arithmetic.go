@@ -248,7 +248,7 @@ func (r Rat) Multiplied(other Rat) Rat {
 
 // AddInt adds an int64 value to the current rational number (mutable operation).
 func (r *Rat) AddInt(value int64) {
-	r.Add(NewFromInt(value))
+	r.Add(NewFromInt64(value))
 }
 
 // AddedInt returns the sum of current and an int64 value (immutable operation).
@@ -261,7 +261,7 @@ func (r Rat) AddedInt(value int64) Rat {
 
 // SubInt subtracts an int64 value from the current rational number (mutable operation).
 func (r *Rat) SubInt(value int64) {
-	r.Sub(NewFromInt(value))
+	r.Sub(NewFromInt64(value))
 }
 
 // SubtractedInt returns the difference of current and an int64 value (immutable operation).
@@ -274,7 +274,7 @@ func (r Rat) SubtractedInt(value int64) Rat {
 
 // MulInt multiplies the current rational number by an int64 value (mutable operation).
 func (r *Rat) MulInt(value int64) {
-	r.Mul(NewFromInt(value))
+	r.Mul(NewFromInt64(value))
 }
 
 // MultipliedInt returns the product of current and an int64 value (immutable operation).
@@ -287,7 +287,7 @@ func (r Rat) MultipliedInt(value int64) Rat {
 
 // DivInt divides the current rational number by an int64 value (mutable operation).
 func (r *Rat) DivInt(value int64) {
-	r.Div(NewFromInt(value))
+	r.Div(NewFromInt64(value))
 }
 
 // DividedInt returns the quotient of current divided by an int64 value (immutable operation).
@@ -347,5 +347,149 @@ func (r *Rat) DivFloat(value float64) {
 func (r Rat) DividedFloat(value float64) Rat {
 	result := r // make a copy
 	result.DivFloat(value)
+	return result
+}
+
+// Invert inverts the current rational number (mutable operation).
+// Formula: a/b -> b/a (with sign moved to numerator)
+// Sets invalid state on zero inversion or overflow.
+func (r *Rat) Invert() {
+	// If already invalid, remain invalid
+	if r.IsInvalid() {
+		return
+	}
+
+	// Check for inversion of zero (division by zero)
+	if r.numerator == 0 {
+		r.Invalidate()
+		return
+	}
+
+	// For inversion: a/b -> b/a
+	// We need to handle the sign correctly since numerator is signed and denominator is unsigned
+
+	// Get the sign from the numerator
+	isNegative := r.numerator < 0
+
+	// Convert denominator to signed int64 for new numerator
+	newNum, ok := uint64ToInt64WithSign(r.denominator, isNegative)
+	if !ok {
+		// Overflow when converting denominator to signed numerator
+		r.Invalidate()
+		return
+	}
+
+	// Convert absolute value of numerator to uint64 for new denominator
+	newDenom := absInt64ToUint64(r.numerator)
+
+	// Store the result
+	r.numerator = newNum
+	r.denominator = newDenom
+}
+
+// Inverted returns the inverse of the current rational number (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) Inverted() Rat {
+	result := r // make a copy
+	result.Invert()
+	return result
+}
+
+// ScaleDown scales the rational number down by n decimal places (mutable operation).
+// Equivalent to dividing by 10^n, moving the decimal point left.
+// For negative n, calls ScaleUp with |n|.
+// Sets invalid state on overflow or with invalid operands.
+func (r *Rat) ScaleDown(n int) {
+	// If already invalid, remain invalid
+	if r.IsInvalid() {
+		return
+	}
+
+	// Handle zero scale - no operation needed
+	if n == 0 {
+		return
+	}
+
+	// Handle negative scale by calling ScaleUp
+	if n < 0 {
+		r.ScaleUp(-n)
+		return
+	}
+
+	// Get power of 10
+	powerOf10, overflow := powerOf10(n)
+	if overflow {
+		r.Invalidate()
+		return
+	}
+
+	// ScaleDown: divide by 10^n = multiply denominator by 10^n
+	// Check for denominator overflow
+	if willOverflowUint64Mul(r.denominator, powerOf10) {
+		r.Invalidate()
+		return
+	}
+
+	r.denominator *= powerOf10
+}
+
+// ScaledDown returns a new rational number scaled down by n decimal places (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) ScaledDown(n int) Rat {
+	result := r // make a copy
+	result.ScaleDown(n)
+	return result
+}
+
+// ScaleUp scales the rational number up by n decimal places (mutable operation).
+// Equivalent to multiplying by 10^n, moving the decimal point right.
+// For negative n, calls ScaleDown with |n|.
+// Sets invalid state on overflow or with invalid operands.
+func (r *Rat) ScaleUp(n int) {
+	// If already invalid, remain invalid
+	if r.IsInvalid() {
+		return
+	}
+
+	// Handle zero scale - no operation needed
+	if n == 0 {
+		return
+	}
+
+	// Handle negative scale by calling ScaleDown
+	if n < 0 {
+		r.ScaleDown(-n)
+		return
+	}
+
+	// Get power of 10
+	powerOf10, overflow := powerOf10(n)
+	if overflow {
+		r.Invalidate()
+		return
+	}
+
+	// ScaleUp: multiply by 10^n = multiply numerator by 10^n
+	// Check for numerator overflow
+	if willOverflowInt64MulUint64(r.numerator, powerOf10) {
+		r.Invalidate()
+		return
+	}
+
+	// Handle multiplication with proper sign handling
+	if r.numerator >= 0 {
+		r.numerator *= int64(powerOf10) //nolint:gosec // overflow checked above
+	} else {
+		// Handle negative case carefully to avoid overflow
+		absNum := uint64(-r.numerator)
+		r.numerator = -int64(absNum * powerOf10) //nolint:gosec // overflow checked above
+	}
+}
+
+// ScaledUp returns a new rational number scaled up by n decimal places (immutable operation).
+// Doesn't modify the original rational number.
+func (r Rat) ScaledUp(n int) Rat {
+	result := r // make a copy
+	result.ScaleUp(n)
 	return result
 }

@@ -213,3 +213,63 @@ func (r Rat) Rounded(roundType RoundType, scale int) Rat {
 	result.Round(roundType, scale)
 	return result
 }
+
+// Round64Down rounds the rational number to an int64 using RoundDown strategy with scale 0.
+func (r Rat) Round64Down() int64 {
+	return r.Rounded(RoundDown, 0).ToInt64()
+}
+
+// Round64Up rounds the rational number to an int64 using RoundUp strategy with scale 0.
+func (r Rat) Round64Up() int64 {
+	return r.Rounded(RoundUp, 0).ToInt64()
+}
+
+// Round64HalfUp rounds the rational number to an int64 using RoundHalfUp strategy with scale 0.
+func (r Rat) Round64HalfUp() int64 {
+	return r.Rounded(RoundHalfUp, 0).ToInt64()
+}
+
+// RoundDown rounds the rational number to an int using RoundDown strategy with scale 0.
+func (r Rat) RoundDown() int {
+	return r.Rounded(RoundDown, 0).ToInt()
+}
+
+// RoundUp rounds the rational number to an int using RoundUp strategy with scale 0.
+func (r Rat) RoundUp() int {
+	return r.Rounded(RoundUp, 0).ToInt()
+}
+
+// RoundHalfUp rounds the rational number to an int using RoundHalfUp strategy with scale 0.
+func (r Rat) RoundHalfUp() int {
+	return r.Rounded(RoundHalfUp, 0).ToInt()
+}
+
+// RoundFloatDown rounds the rational number to a float64 using RoundDown strategy with scale 0.
+func (r Rat) RoundFloatDown() float64 {
+	return r.Rounded(RoundDown, 0).ToFloat64()
+}
+
+// RoundFloatUp rounds the rational number to a float64 using RoundUp strategy with scale 0.
+func (r Rat) RoundFloatUp() float64 {
+	return r.Rounded(RoundUp, 0).ToFloat64()
+}
+
+// RoundFloatHalfUp rounds the rational number to a float64 using RoundHalfUp strategy with scale 0.
+func (r Rat) RoundFloatHalfUp() float64 {
+	return r.Rounded(RoundHalfUp, 0).ToFloat64()
+}
+
+// RoundFloat32Down rounds the rational number to a float32 using RoundDown strategy with scale 0.
+func (r Rat) RoundFloat32Down() float32 {
+	return r.Rounded(RoundDown, 0).ToFloat32()
+}
+
+// RoundFloat32Up rounds the rational number to a float32 using RoundUp strategy with scale 0.
+func (r Rat) RoundFloat32Up() float32 {
+	return r.Rounded(RoundUp, 0).ToFloat32()
+}
+
+// RoundFloat32HalfUp rounds the rational number to a float32 using RoundHalfUp strategy with scale 0.
+func (r Rat) RoundFloat32HalfUp() float32 {
+	return r.Rounded(RoundHalfUp, 0).ToFloat32()
+}

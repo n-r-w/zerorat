@@ -78,7 +78,7 @@ linters:
         - map
     exhaustruct:
       include:
-        - aa213sdfeiq32w123afnd
+        - aa213sdfeiq32w123afnd # some trash in order to disable by default
     gocognit:
       min-complexity: 30
     goconst:
@@ -197,23 +197,9 @@ linters:
           - unparam
           - whitespace
         path: _test\.go
-    paths:
-      - third_party$
-      - builtin$
-      - ^internal/pkg/availcache/loadtest/.*\.go$
-      - ^internal/pkg/availcache/profile/.*\.go$
-      - ^internal/pkg/availcache/loadtest/bench/.*\.go$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 formatters:
   enable:
     - goimports
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - loadtest$
-      - profile$
-      - bench$

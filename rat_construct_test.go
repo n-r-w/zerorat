@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestNew_ValidInputs tests creation of valid rational numbers
@@ -234,7 +235,7 @@ func TestNewFromInt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewFromInt(tt.value)
+			r := NewFromInt64(tt.value)
 			assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
 			assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
 		})
@@ -381,6 +382,104 @@ func TestRat_UtilityMethods(t *testing.T) {
 	assert.False(t, New(1, 2).IsZero())
 	assert.True(t, New(1, 1).IsOne())
 	assert.False(t, New(2, 1).IsOne())
+
+	// HasFractional
+	assert.False(t, New(2, 1).HasFractional()) // whole number
+	assert.True(t, New(1, 2).HasFractional())  // fractional
+	assert.False(t, New(0, 1).HasFractional()) // zero
+
+	// IntegerAndFraction
+	intPart, fracPart := New(7, 3).IntegerAndFraction()
+	assert.Equal(t, int64(2), intPart) // 7/3 = 2 + 1/3
+	assert.Equal(t, int64(1), fracPart.numerator)
+	assert.Equal(t, uint64(3), fracPart.denominator)
+}
+
+// TestRat_HasFractional tests the HasFractional method
+func TestRat_HasFractional(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		expected bool
+		desc     string
+	}{
+		// Whole numbers (should return false)
+		{"whole positive", New(5, 1), false, "5/1 is a whole number"},
+		{"whole negative", New(-5, 1), false, "-5/1 is a whole number"},
+		{"zero", New(0, 1), false, "0/1 is a whole number"},
+		{"large whole", New(1000000, 1), false, "1000000/1 is a whole number"},
+		{"reduced whole", New(10, 5), false, "10/5 = 2/1 is a whole number"},
+		{"negative reduced whole", New(-15, 3), false, "-15/3 = -5/1 is a whole number"},
+
+		// Fractional numbers (should return true)
+		{"simple fraction", New(1, 2), true, "1/2 has fractional part"},
+		{"negative fraction", New(-1, 2), true, "-1/2 has fractional part"},
+		{"complex fraction", New(7, 3), true, "7/3 has fractional part"},
+		{"large fraction", New(1000001, 1000000), true, "1000001/1000000 has fractional part"},
+		{"reduced fraction", New(3, 6), true, "3/6 = 1/2 has fractional part"},
+		{"negative reduced fraction", New(-7, 14), true, "-7/14 = -1/2 has fractional part"},
+
+		// Edge cases
+		{"invalid state", Rat{numerator: 1, denominator: 0}, false, "invalid rational should return false"},
+		{"zero invalid", Rat{numerator: 0, denominator: 0}, false, "invalid zero should return false"},
+		{"max int numerator whole", New(9223372036854775807, 1), false, "MaxInt64/1 is whole"},
+		{"min int numerator whole", New(-9223372036854775808, 1), false, "MinInt64/1 is whole"},
+		{"max denominator fraction", New(1, 18446744073709551615), true, "1/MaxUint64 has fractional part"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.rat.HasFractional()
+			assert.Equal(t, tt.expected, result, tt.desc)
+		})
+	}
+}
+
+// TestRat_IntegerAndFraction tests the IntegerAndFraction method
+func TestRat_IntegerAndFraction(t *testing.T) {
+	tests := []struct {
+		name         string
+		rat          Rat
+		expectedInt  int64
+		expectedFrac Rat
+		desc         string
+	}{
+		// Whole numbers (fractional part should be 0/1)
+		{"positive whole", New(5, 1), 5, New(0, 1), "5/1 = 5 + 0/1"},
+		{"negative whole", New(-5, 1), -5, New(0, 1), "-5/1 = -5 + 0/1"},
+		{"zero", New(0, 1), 0, New(0, 1), "0/1 = 0 + 0/1"},
+		{"reduced whole", New(10, 5), 2, New(0, 1), "10/5 = 2 + 0/1"},
+		{"negative reduced whole", New(-15, 3), -5, New(0, 1), "-15/3 = -5 + 0/1"},
+
+		// Mixed numbers (proper integer and fractional parts)
+		{"simple mixed positive", New(7, 3), 2, New(1, 3), "7/3 = 2 + 1/3"},
+		{"simple mixed negative", New(-7, 3), -2, New(-1, 3), "-7/3 = -2 + (-1/3)"},
+		{"complex mixed", New(22, 7), 3, New(1, 7), "22/7 = 3 + 1/7"},
+		{"negative complex mixed", New(-22, 7), -3, New(-1, 7), "-22/7 = -3 + (-1/7)"},
+		{"large mixed", New(1000001, 1000000), 1, New(1, 1000000), "1000001/1000000 = 1 + 1/1000000"},
+
+		// Proper fractions (integer part should be 0)
+		{"proper fraction positive", New(1, 2), 0, New(1, 2), "1/2 = 0 + 1/2"},
+		{"proper fraction negative", New(-1, 2), 0, New(-1, 2), "-1/2 = 0 + (-1/2)"},
+		{"small proper fraction", New(3, 7), 0, New(3, 7), "3/7 = 0 + 3/7"},
+		{"negative small proper", New(-3, 7), 0, New(-3, 7), "-3/7 = 0 + (-3/7)"},
+
+		// Edge cases
+		{"invalid state", Rat{numerator: 1, denominator: 0}, 0, Rat{numerator: 0, denominator: 0}, "invalid rational should return 0 and invalid fraction"},
+		{"max int numerator", New(9223372036854775807, 1), 9223372036854775807, New(0, 1), "MaxInt64/1 = MaxInt64 + 0/1"},
+		{"min int numerator", New(-9223372036854775808, 1), -9223372036854775808, New(0, 1), "MinInt64/1 = MinInt64 + 0/1"},
+		{"large denominator", New(1, 18446744073709551615), 0, New(1, 18446744073709551615), "1/MaxUint64 = 0 + 1/MaxUint64"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			intPart, fracPart := tt.rat.IntegerAndFraction()
+
+			assert.Equal(t, tt.expectedInt, intPart, "integer part mismatch: %s", tt.desc)
+			assert.Equal(t, tt.expectedFrac.numerator, fracPart.numerator, "fractional numerator mismatch: %s", tt.desc)
+			assert.Equal(t, tt.expectedFrac.denominator, fracPart.denominator, "fractional denominator mismatch: %s", tt.desc)
+		})
+	}
 }
 
 // TestNewFromFloat64 tests creation of rational number from float64 with minimum precision loss
@@ -649,6 +748,465 @@ func TestNewFromFloat64_EdgeCases(t *testing.T) {
 				assert.Equal(t, int64(0), r.numerator, "zero should have numerator 0")
 				assert.Equal(t, uint64(1), r.denominator, "zero should have denominator 1")
 			}
+		})
+	}
+}
+
+// TestRat_ToInt64Err tests the ToInt64Err method
+func TestRat_ToInt64Err(t *testing.T) {
+	tests := []struct {
+		name        string
+		rat         Rat
+		expected    int64
+		expectError bool
+	}{
+		{
+			name:        "valid positive integer",
+			rat:         New(5, 1),
+			expected:    5,
+			expectError: false,
+		},
+		{
+			name:        "valid negative integer",
+			rat:         New(-3, 1),
+			expected:    -3,
+			expectError: false,
+		},
+		{
+			name:        "valid fraction",
+			rat:         New(7, 3),
+			expected:    2,
+			expectError: false,
+		},
+		{
+			name:        "valid negative fraction",
+			rat:         New(-7, 3),
+			expected:    -2,
+			expectError: false,
+		},
+		{
+			name:        "zero",
+			rat:         New(0, 1),
+			expected:    0,
+			expectError: false,
+		},
+		{
+			name:        "invalid rat",
+			rat:         Rat{numerator: 1, denominator: 0},
+			expected:    0,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.rat.ToInt64Err()
+
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Equal(t, ErrInvalid, err)
+				assert.Equal(t, int64(0), result)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestRat_ToInt64 tests the ToInt64 method
+func TestRat_ToInt64(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		expected int64
+	}{
+		{
+			name:     "valid positive integer",
+			rat:      New(5, 1),
+			expected: 5,
+		},
+		{
+			name:     "valid negative integer",
+			rat:      New(-3, 1),
+			expected: -3,
+		},
+		{
+			name:     "valid fraction",
+			rat:      New(7, 3),
+			expected: 2,
+		},
+		{
+			name:     "valid negative fraction",
+			rat:      New(-7, 3),
+			expected: -2,
+		},
+		{
+			name:     "zero",
+			rat:      New(0, 1),
+			expected: 0,
+		},
+		{
+			name:     "invalid rat",
+			rat:      Rat{numerator: 1, denominator: 0},
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.rat.ToInt64()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestRat_ToIntErr tests the ToIntErr method
+func TestRat_ToIntErr(t *testing.T) {
+	tests := []struct {
+		name        string
+		rat         Rat
+		expected    int
+		expectError bool
+	}{
+		{
+			name:        "valid positive integer",
+			rat:         New(5, 1),
+			expected:    5,
+			expectError: false,
+		},
+		{
+			name:        "valid negative integer",
+			rat:         New(-3, 1),
+			expected:    -3,
+			expectError: false,
+		},
+		{
+			name:        "valid fraction",
+			rat:         New(7, 3),
+			expected:    2,
+			expectError: false,
+		},
+		{
+			name:        "valid negative fraction",
+			rat:         New(-7, 3),
+			expected:    -2,
+			expectError: false,
+		},
+		{
+			name:        "zero",
+			rat:         New(0, 1),
+			expected:    0,
+			expectError: false,
+		},
+		{
+			name:        "invalid rat",
+			rat:         Rat{numerator: 1, denominator: 0},
+			expected:    0,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.rat.ToIntErr()
+
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Equal(t, ErrInvalid, err)
+				assert.Equal(t, 0, result)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestRat_ToInt tests the ToInt method
+func TestRat_ToInt(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		expected int
+	}{
+		{
+			name:     "valid positive integer",
+			rat:      New(5, 1),
+			expected: 5,
+		},
+		{
+			name:     "valid negative integer",
+			rat:      New(-3, 1),
+			expected: -3,
+		},
+		{
+			name:     "valid fraction",
+			rat:      New(7, 3),
+			expected: 2,
+		},
+		{
+			name:     "valid negative fraction",
+			rat:      New(-7, 3),
+			expected: -2,
+		},
+		{
+			name:     "zero",
+			rat:      New(0, 1),
+			expected: 0,
+		},
+		{
+			name:     "invalid rat",
+			rat:      Rat{numerator: 1, denominator: 0},
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.rat.ToInt()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestRat_ToFloatErr tests the ToFloatErr method
+func TestRat_ToFloatErr(t *testing.T) {
+	tests := []struct {
+		name        string
+		rat         Rat
+		expected    float64
+		expectError bool
+	}{
+		{
+			name:        "valid positive integer",
+			rat:         New(5, 1),
+			expected:    5.0,
+			expectError: false,
+		},
+		{
+			name:        "valid negative integer",
+			rat:         New(-3, 1),
+			expected:    -3.0,
+			expectError: false,
+		},
+		{
+			name:        "valid fraction",
+			rat:         New(1, 2),
+			expected:    0.5,
+			expectError: false,
+		},
+		{
+			name:        "valid negative fraction",
+			rat:         New(-3, 4),
+			expected:    -0.75,
+			expectError: false,
+		},
+		{
+			name:        "zero",
+			rat:         New(0, 1),
+			expected:    0.0,
+			expectError: false,
+		},
+		{
+			name:        "invalid rat",
+			rat:         Rat{numerator: 1, denominator: 0},
+			expected:    0.0,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.rat.ToFloat64Err()
+
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Equal(t, ErrInvalid, err)
+				assert.InDelta(t, 0.0, result, 1e-15)
+			} else {
+				require.NoError(t, err)
+				assert.InDelta(t, tt.expected, result, 1e-15)
+			}
+		})
+	}
+}
+
+// TestRat_ToFloat tests the ToFloat method
+func TestRat_ToFloat(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		expected float64
+	}{
+		{
+			name:     "valid positive integer",
+			rat:      New(5, 1),
+			expected: 5.0,
+		},
+		{
+			name:     "valid negative integer",
+			rat:      New(-3, 1),
+			expected: -3.0,
+		},
+		{
+			name:     "valid fraction",
+			rat:      New(1, 2),
+			expected: 0.5,
+		},
+		{
+			name:     "valid negative fraction",
+			rat:      New(-3, 4),
+			expected: -0.75,
+		},
+		{
+			name:     "zero",
+			rat:      New(0, 1),
+			expected: 0.0,
+		},
+		{
+			name:     "invalid rat",
+			rat:      Rat{numerator: 1, denominator: 0},
+			expected: 0.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.rat.ToFloat64()
+			assert.InDelta(t, tt.expected, result, 1e-15)
+		})
+	}
+}
+
+// TestRat_ToFloat32Err tests the ToFloat32Err method
+func TestRat_ToFloat32Err(t *testing.T) {
+	tests := []struct {
+		name        string
+		rat         Rat
+		expected    float32
+		expectError bool
+	}{
+		{
+			name:        "valid positive integer",
+			rat:         New(5, 1),
+			expected:    5.0,
+			expectError: false,
+		},
+		{
+			name:        "valid negative integer",
+			rat:         New(-3, 1),
+			expected:    -3.0,
+			expectError: false,
+		},
+		{
+			name:        "valid fraction",
+			rat:         New(1, 2),
+			expected:    0.5,
+			expectError: false,
+		},
+		{
+			name:        "valid negative fraction",
+			rat:         New(-3, 4),
+			expected:    -0.75,
+			expectError: false,
+		},
+		{
+			name:        "zero",
+			rat:         New(0, 1),
+			expected:    0.0,
+			expectError: false,
+		},
+		{
+			name:        "invalid rat",
+			rat:         Rat{numerator: 1, denominator: 0},
+			expected:    0.0,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.rat.ToFloat32Err()
+
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Equal(t, ErrInvalid, err)
+				assert.InDelta(t, float32(0.0), result, 1e-7)
+			} else {
+				require.NoError(t, err)
+				assert.InDelta(t, tt.expected, result, 1e-7)
+			}
+		})
+	}
+}
+
+// TestRat_ToFloat32Err_Overflow tests overflow scenarios for ToFloat32Err
+func TestRat_ToFloat32Err_Overflow(t *testing.T) {
+	// Test with a value that should overflow float32
+	// Create a rational number that represents a value larger than MaxFloat32
+	largeRat := New(1, 1)
+	largeRat.numerator = 1000000000000000000 // 1e18
+	largeRat.denominator = 1
+
+	// Convert to float64 first to check the actual value
+	result64 := float64(largeRat.numerator) / float64(largeRat.denominator)
+
+	// If the value is within float32 range, the conversion should succeed
+	// If it's outside the range, it should return an error
+	result32, err := largeRat.ToFloat32Err()
+
+	// For this specific large value, it should be within float32 range
+	// so we expect no error
+	if result64 <= math.MaxFloat32 && result64 >= -math.MaxFloat32 {
+		require.NoError(t, err)
+		assert.InDelta(t, float32(result64), result32, 1e-7)
+	}
+}
+
+// TestRat_ToFloat32 tests the ToFloat32 method
+func TestRat_ToFloat32(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		expected float32
+	}{
+		{
+			name:     "valid positive integer",
+			rat:      New(5, 1),
+			expected: 5.0,
+		},
+		{
+			name:     "valid negative integer",
+			rat:      New(-3, 1),
+			expected: -3.0,
+		},
+		{
+			name:     "valid fraction",
+			rat:      New(1, 2),
+			expected: 0.5,
+		},
+		{
+			name:     "valid negative fraction",
+			rat:      New(-3, 4),
+			expected: -0.75,
+		},
+		{
+			name:     "zero",
+			rat:      New(0, 1),
+			expected: 0.0,
+		},
+		{
+			name:     "invalid rat",
+			rat:      Rat{numerator: 1, denominator: 0},
+			expected: 0.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.rat.ToFloat32()
+			assert.InDelta(t, tt.expected, result, 1e-7)
 		})
 	}
 }
