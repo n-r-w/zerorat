@@ -1,10 +1,12 @@
 package money
 
 import (
+	"math"
 	"testing"
 
 	"github.com/n-r-w/zerorat"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestNewMoney tests the NewMoney constructor
@@ -86,53 +88,75 @@ func TestNewMoneyInt(t *testing.T) {
 	})
 }
 
-// TestNewMoneyFloat tests the NewMoneyFloat constructor
+// TestNewMoneyFloat tests the exact float constructor for Money.
 func TestNewMoneyFloat(t *testing.T) {
 	t.Run("valid float", func(t *testing.T) {
-		m := NewMoneyFloat("USD", 1.23)
+		m, err := NewMoneyFloat("USD", 1.23)
 
+		require.NoError(t, err)
 		assert.True(t, m.IsValid(), "Money should be valid")
 		assert.Equal(t, "USD", m.Currency(), "Currency should match")
-		expected := zerorat.NewFromFloat64(1.23)
+		expected, err := zerorat.NewFromFloat64(1.23)
+		require.NoError(t, err)
 		actualAmount := m.Amount()
 		assert.True(t, actualAmount.Equal(expected), "Amount should match")
 	})
 
 	t.Run("negative float", func(t *testing.T) {
-		m := NewMoneyFloat("EUR", -5.67)
+		m, err := NewMoneyFloat("EUR", -5.67)
 
+		require.NoError(t, err)
 		assert.True(t, m.IsValid(), "Money should be valid")
 		assert.Equal(t, "EUR", m.Currency(), "Currency should match")
-		expected := zerorat.NewFromFloat64(-5.67)
+		expected, err := zerorat.NewFromFloat64(-5.67)
+		require.NoError(t, err)
 		actualAmount := m.Amount()
 		assert.True(t, actualAmount.Equal(expected), "Amount should match")
 	})
 
 	t.Run("zero float", func(t *testing.T) {
-		m := NewMoneyFloat("JPY", 0.0)
+		m, err := NewMoneyFloat("JPY", 0.0)
 
+		require.NoError(t, err)
 		assert.True(t, m.IsValid(), "Money should be valid")
 		assert.Equal(t, "JPY", m.Currency(), "Currency should match")
-		expected := zerorat.Zero()
 		actualAmount := m.Amount()
-		assert.True(t, actualAmount.Equal(expected), "Amount should be zero")
+		assert.True(t, actualAmount.Equal(zerorat.Zero()), "Amount should be zero")
 	})
 
-	t.Run("invalid float propagates", func(t *testing.T) {
-		// Test with a float that would create invalid Rat
-		m := NewMoneyFloat("USD", 1e100) // Very large number that might overflow
-
-		// If the float conversion fails, Money should be invalid
-		actualAmount := m.Amount()
-		if actualAmount.IsInvalid() {
-			assert.True(t, m.IsInvalid(), "Money with invalid float should be invalid")
-		}
+	t.Run("unrepresentable float returns error", func(t *testing.T) {
+		_, err := NewMoneyFloat("USD", 1e100)
+		require.ErrorIs(t, err, zerorat.ErrNotRepresentable)
 	})
 
-	t.Run("empty currency makes invalid", func(t *testing.T) {
-		m := NewMoneyFloat("", 1.23)
+	t.Run("non-finite float returns typed error", func(t *testing.T) {
+		_, err := NewMoneyFloat("USD", math.Inf(1))
+		require.ErrorIs(t, err, zerorat.ErrNonFiniteFloat)
+	})
 
-		assert.True(t, m.IsInvalid(), "Money with empty currency should be invalid")
+	t.Run("empty currency returns error", func(t *testing.T) {
+		_, err := NewMoneyFloat("", 1.23)
+		require.ErrorIs(t, err, ErrMoneyInvalid)
+	})
+
+	t.Run("float pointer wrappers keep error contract", func(t *testing.T) {
+		v64 := 0.5
+		m, err := NewMoneyFloat64Ptr("USD", &v64)
+		require.NoError(t, err)
+		assert.True(t, m.Equal(mustNewMoneyFloat(t, "USD", 0.5)))
+
+		m, err = NewMoneyFloat64Ptr("USD", nil)
+		require.NoError(t, err)
+		assert.True(t, m.IsInvalid())
+
+		v32 := float32(0.25)
+		m, err = NewMoneyFloat32Ptr("USD", &v32)
+		require.NoError(t, err)
+		assert.True(t, m.Equal(mustNewMoneyFloat(t, "USD", 0.25)))
+
+		nan := math.Inf(1)
+		_, err = NewMoneyFloat64Ptr("USD", &nan)
+		require.ErrorIs(t, err, zerorat.ErrNonFiniteFloat)
 	})
 }
 

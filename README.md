@@ -31,9 +31,20 @@ go get github.com/n-r-w/zerorat@latest
 // Construction
 a := New(3, 4)        // 3/4
 b := NewFromInt(5)    // 5/1
+c, err := NewFromFloat64(0.125) // exact float -> 1/8
+if err != nil {
+    // handle ErrNonFiniteFloat / ErrNotRepresentable
+}
+
+d, err := NewApproxFromFloat64(3.0 / (1 << 64)) // nearest representable Rat on the 1/2^63 grid
+if err != nil {
+    // handle ErrNonFiniteFloat / ErrNotRepresentable
+}
 
 // Mutable operations (results not auto-reduced)
 a.Add(b)                 // a = 3/4 + 5/1 = (3*1 + 5*4)/(4*1) = 23/4
+a.Add(c)                 // explicit conversion first, then exact arithmetic
+a.Add(d)                 // approximate path is opt-in and named explicitly
 a.Reduce()               // a = 23/4 (manually reduce if needed)
 
 // Immutable operations  
@@ -60,9 +71,16 @@ import (
 
 // Construction
 price := money.NewMoneyInt("USD", 1299)        // $12.99 (in cents)
-tax := money.NewMoneyFloat("USD", 0.85)        // $0.85
+tax, err := money.NewMoneyFloat("USD", 0.85) // exact float input
 discount := money.NewMoney("USD", zerorat.New(15, 100)) // 15% as fraction
 discount1 := money.NewMoneyFromFraction("USD", 20, 100) // 20% as fraction
+
+if err != nil {
+    // handle ErrNonFiniteFloat / ErrNotRepresentable
+}
+
+// NewMoneyFloat preserves the exact IEEE-754 binary value.
+// For decimal money semantics, prefer integer minor units or explicit fractions.
 
 // Mutable operations (error handling for currency mismatches)
 err := price.Add(tax)                          // price = $13.84
@@ -70,7 +88,8 @@ err = price.PercentInt(10)                     // 10% of price
 
 // Immutable operations
 total := price.Added(tax)                      // returns new Money, price unchanged
-afterDiscount := total.MultipliedFloat(0.85)  // 15% discount
+discountRate, err := zerorat.NewFromFloat64(0.85)
+afterDiscount := total.MultipliedRat(discountRate)  // 15% discount
 
 // Currency validation
 usd := money.NewMoneyInt("USD", 100)
@@ -104,22 +123,13 @@ There are two validation functions available:
 - ZeroRat: **0 allocs/op** for all arithmetic operations
 - big.Rat: 2-20 allocs/op depending on operation complexity
 
-*Benchmarks run on Apple M4 Max.*
-
-### Recent Performance Improvements
-
-The latest version includes significant performance optimizations:
-- **Multiplication: 62% faster** - Removed automatic reduction for better performance
-- **Complex expressions: 62% faster** - Compound benefit from optimized operations
-- **Array operations: 91% faster** - Massive improvement for bulk calculations
-- **Division: 13% faster** - Streamlined overflow detection
-- **Overflow-safe comparisons** - Now uses 128-bit arithmetic via math/bits package
-
 ## Limitations
 
 - Numbers must fit within int64 (numerator) and uint64 (denominator) ranges
 - No arbitrary precision support
-- Overflow results in invalid state rather than expanding precision
+- Arithmetic overflow results in invalid state rather than expanding precision
+- Exact float conversion returns `ErrNonFiniteFloat` or `ErrNotRepresentable` instead of changing the value silently
+- Approximate float conversion is opt-in through `NewApproxFromFloat64` / `NewApproxFromFloat32` and rounds to the nearest representable Rat on the `1/2^63` grid
 
 ## Use Cases
 

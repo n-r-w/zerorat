@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/n-r-w/zerorat"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -324,48 +325,35 @@ func TestMoneyAddScalar(t *testing.T) {
 		assert.True(t, m.Equal(NewMoneyInt("USD", 100)))
 	})
 
-	t.Run("mutable AddFloat - success", func(t *testing.T) {
-		m := NewMoneyInt("USD", 100) // 100 units
+	t.Run("explicit float conversion before Add - success", func(t *testing.T) {
+		m := NewMoneyInt("USD", 100)
+		other := mustNewMoneyFloat(t, "USD", 0.5)
 
-		err := m.AddFloat(0.5) // add 0.5 units
+		err := m.Add(other)
 
 		require.NoError(t, err)
 		assert.True(t, m.IsValid())
-		expected := NewMoneyFloat("USD", 100.5)
-		assert.True(t, m.Equal(expected))
+		assert.True(t, m.Equal(mustNewMoneyFloat(t, "USD", 100.5)))
 	})
 
-	t.Run("mutable AddFloat - invalid float", func(t *testing.T) {
-		m := NewMoneyInt("USD", 100)
+	t.Run("float constructor error is visible before Add", func(t *testing.T) {
+		_, err := NewMoneyFloat("USD", math.Inf(1))
+		require.ErrorIs(t, err, zerorat.ErrNonFiniteFloat)
 
-		err := m.AddFloat(math.Inf(1)) // infinity
-
-		require.Error(t, err)
-		assert.Equal(t, ErrMoneyInvalid, err)
-		assert.True(t, m.IsInvalid())
+		_, err = NewMoneyFloat("USD", 1e100)
+		require.ErrorIs(t, err, zerorat.ErrNotRepresentable)
 	})
 
-	t.Run("immutable AddedFloatErr - success", func(t *testing.T) {
+	t.Run("explicit float conversion before AddedErr - success", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
+		other := mustNewMoneyFloat(t, "USD", 0.5)
 
-		result, err := m.AddedFloatErr(0.5)
+		result, err := m.AddedErr(other)
 
 		require.NoError(t, err)
 		assert.True(t, result.IsValid())
-		expected := NewMoneyFloat("USD", 100.5)
-		assert.True(t, result.Equal(expected))
-		// Original unchanged
+		assert.True(t, result.Equal(mustNewMoneyFloat(t, "USD", 100.5)))
 		assert.True(t, m.Equal(NewMoneyInt("USD", 100)))
-	})
-
-	t.Run("immutable AddedFloat - invalid float returns invalid", func(t *testing.T) {
-		m := NewMoneyInt("USD", 100)
-
-		result := m.AddedFloat(math.Inf(1)) // infinity
-
-		assert.True(t, result.IsInvalid())
-		// Original unchanged
-		assert.True(t, m.IsValid())
 	})
 }
 
@@ -417,48 +405,35 @@ func TestMoneySubScalar(t *testing.T) {
 		assert.True(t, m.Equal(NewMoneyInt("USD", 100)))
 	})
 
-	t.Run("mutable SubFloat - success", func(t *testing.T) {
-		m := NewMoneyFloat("USD", 2.0) // 2.0 units
+	t.Run("explicit float conversion before Sub - success", func(t *testing.T) {
+		m := mustNewMoneyFloat(t, "USD", 2.0)
+		other := mustNewMoneyFloat(t, "USD", 0.5)
 
-		err := m.SubFloat(0.5) // subtract 0.5 units
+		err := m.Sub(other)
 
 		require.NoError(t, err)
 		assert.True(t, m.IsValid())
-		expected := NewMoneyFloat("USD", 1.5) // 2.0 - 0.5 = 1.5
-		assert.True(t, m.Equal(expected))
+		assert.True(t, m.Equal(mustNewMoneyFloat(t, "USD", 1.5)))
 	})
 
-	t.Run("mutable SubFloat - invalid float", func(t *testing.T) {
-		m := NewMoneyInt("USD", 100)
+	t.Run("float constructor error is visible before Sub", func(t *testing.T) {
+		_, err := NewMoneyFloat("USD", math.Inf(1))
+		require.ErrorIs(t, err, zerorat.ErrNonFiniteFloat)
 
-		err := m.SubFloat(math.Inf(1)) // infinity
-
-		require.Error(t, err)
-		assert.Equal(t, ErrMoneyInvalid, err)
-		assert.True(t, m.IsInvalid())
+		_, err = NewMoneyFloat("USD", 1e100)
+		require.ErrorIs(t, err, zerorat.ErrNotRepresentable)
 	})
 
-	t.Run("immutable SubtractedFloatErr - success", func(t *testing.T) {
-		m := NewMoneyFloat("USD", 2.0)
+	t.Run("explicit float conversion before SubtractedErr - success", func(t *testing.T) {
+		m := mustNewMoneyFloat(t, "USD", 2.0)
+		other := mustNewMoneyFloat(t, "USD", 0.5)
 
-		result, err := m.SubtractedFloatErr(0.5)
+		result, err := m.SubtractedErr(other)
 
 		require.NoError(t, err)
 		assert.True(t, result.IsValid())
-		expected := NewMoneyFloat("USD", 1.5) // 2.0 - 0.5 = 1.5
-		assert.True(t, result.Equal(expected))
-		// Original unchanged
-		assert.True(t, m.Equal(NewMoneyFloat("USD", 2.0)))
-	})
-
-	t.Run("immutable SubtractedFloat - invalid float returns invalid", func(t *testing.T) {
-		m := NewMoneyInt("USD", 100)
-
-		result := m.SubtractedFloat(math.Inf(1)) // infinity
-
-		assert.True(t, result.IsInvalid())
-		// Original unchanged
-		assert.True(t, m.IsValid())
+		assert.True(t, result.Equal(mustNewMoneyFloat(t, "USD", 1.5)))
+		assert.True(t, m.Equal(mustNewMoneyFloat(t, "USD", 2.0)))
 	})
 
 	t.Run("negative result", func(t *testing.T) {
@@ -803,50 +778,35 @@ func TestMoneyPercentOperations(t *testing.T) {
 		})
 	})
 
-	t.Run("PercentFloat operations", func(t *testing.T) {
-		t.Run("mutable PercentFloat - success", func(t *testing.T) {
-			m := NewMoneyInt("USD", 100) // $1.00
+	t.Run("Percent with Rat operations", func(t *testing.T) {
+		t.Run("mutable Percent - success", func(t *testing.T) {
+			m := NewMoneyInt("USD", 100)
 
-			err := m.PercentFloat(50.0) // 50% of $1.00 = $0.50
+			err := m.Percent(zerorat.NewFromInt64(50))
 
 			require.NoError(t, err)
 			assert.True(t, m.IsValid())
-			expected := NewMoneyInt("USD", 50) // 50% of 100 cents = 50 cents
-			assert.True(t, m.Equal(expected))
+			assert.True(t, m.Equal(NewMoneyInt("USD", 50)))
 		})
 
-		t.Run("mutable PercentFloat - invalid float", func(t *testing.T) {
+		t.Run("mutable Percent - invalid Rat", func(t *testing.T) {
 			m := NewMoneyInt("USD", 100)
 
-			err := m.PercentFloat(math.Inf(1)) // infinity
+			err := m.Percent(zerorat.Rat{})
 
 			require.Error(t, err)
 			assert.Equal(t, ErrMoneyInvalid, err)
-			assert.True(t, m.IsInvalid())
 		})
 
-		t.Run("immutable PercentFloatErr - success", func(t *testing.T) {
+		t.Run("immutable PercentedErr - success", func(t *testing.T) {
 			m := NewMoneyInt("USD", 200)
 
-			result, err := m.PercentFloatErr(25.0) // 25% of $2.00 = $0.50
+			result, err := m.PercentedErr(zerorat.NewFromInt64(25))
 
 			require.NoError(t, err)
 			assert.True(t, result.IsValid())
-			expected := NewMoneyInt("USD", 50) // 25% of 200 cents = 50 cents
-			assert.True(t, result.Equal(expected))
-			// Original unchanged
-			original := NewMoneyInt("USD", 200)
-			assert.True(t, m.Equal(original))
-		})
-
-		t.Run("immutable PercentedFloat - invalid float returns invalid", func(t *testing.T) {
-			m := NewMoneyInt("USD", 100)
-
-			result := m.PercentedFloat(math.NaN()) // NaN
-
-			assert.True(t, result.IsInvalid())
-			// Original unchanged
-			assert.True(t, m.IsValid())
+			assert.True(t, result.Equal(NewMoneyInt("USD", 50)))
+			assert.True(t, m.Equal(NewMoneyInt("USD", 200)))
 		})
 	})
 
@@ -975,48 +935,35 @@ func TestMoneyMulScalar(t *testing.T) {
 		assert.True(t, m.Equal(NewMoneyInt("USD", 100)))
 	})
 
-	t.Run("mutable MulFloat - success", func(t *testing.T) {
-		m := NewMoneyInt("USD", 100) // 100 units
+	t.Run("mutable MulRat - success", func(t *testing.T) {
+		m := NewMoneyInt("USD", 100)
 
-		err := m.MulFloat(2.5) // multiply by 2.5
+		err := m.MulRat(mustNewRatFromFloat64(t, 2.5))
 
 		require.NoError(t, err)
 		assert.True(t, m.IsValid())
-		expected := NewMoneyFloat("USD", 250.0) // 100 * 2.5 = 250
-		assert.True(t, m.Equal(expected))
+		assert.True(t, m.Equal(mustNewMoneyFloat(t, "USD", 250.0)))
 	})
 
-	t.Run("mutable MulFloat - invalid float", func(t *testing.T) {
+	t.Run("mutable MulRat - invalid Rat", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
 
-		err := m.MulFloat(math.Inf(1)) // infinity
+		err := m.MulRat(zerorat.Rat{})
 
 		require.Error(t, err)
 		assert.Equal(t, ErrMoneyInvalid, err)
 		assert.True(t, m.IsInvalid())
 	})
 
-	t.Run("immutable MultipliedFloatErr - success", func(t *testing.T) {
+	t.Run("immutable MultipliedRatErr - success", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
 
-		result, err := m.MultipliedFloatErr(2.5)
+		result, err := m.MultipliedRatErr(mustNewRatFromFloat64(t, 2.5))
 
 		require.NoError(t, err)
 		assert.True(t, result.IsValid())
-		expected := NewMoneyFloat("USD", 250.0) // 100 * 2.5 = 250
-		assert.True(t, result.Equal(expected))
-		// Original unchanged
+		assert.True(t, result.Equal(mustNewMoneyFloat(t, "USD", 250.0)))
 		assert.True(t, m.Equal(NewMoneyInt("USD", 100)))
-	})
-
-	t.Run("immutable MultipliedFloat - invalid float returns invalid", func(t *testing.T) {
-		m := NewMoneyInt("USD", 100)
-
-		result := m.MultipliedFloat(math.Inf(1)) // infinity
-
-		assert.True(t, result.IsInvalid())
-		// Original unchanged
-		assert.True(t, m.IsValid())
 	})
 }
 
@@ -1078,47 +1025,43 @@ func TestMoneyDivScalar(t *testing.T) {
 		assert.True(t, m.Equal(NewMoneyInt("USD", 100)))
 	})
 
-	t.Run("mutable DivFloat - success", func(t *testing.T) {
-		m := NewMoneyInt("USD", 100) // 100 units
+	t.Run("mutable DivRat - success", func(t *testing.T) {
+		m := NewMoneyInt("USD", 100)
 
-		err := m.DivFloat(2.0) // divide by 2.0
+		err := m.DivRat(mustNewRatFromFloat64(t, 2.0))
 
 		require.NoError(t, err)
 		assert.True(t, m.IsValid())
-		expected := NewMoneyFloat("USD", 50.0) // 100 / 2.0 = 50
-		assert.True(t, m.Equal(expected))
+		assert.True(t, m.Equal(mustNewMoneyFloat(t, "USD", 50.0)))
 	})
 
-	t.Run("mutable DivFloat - division by zero", func(t *testing.T) {
+	t.Run("mutable DivRat - division by zero", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
 
-		err := m.DivFloat(0.0)
+		err := m.DivRat(zerorat.Zero())
 
 		require.Error(t, err)
 		assert.Equal(t, ErrMoneyInvalid, err)
 		assert.True(t, m.IsInvalid())
 	})
 
-	t.Run("immutable DividedFloatErr - success", func(t *testing.T) {
+	t.Run("immutable DividedRatErr - success", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
 
-		result, err := m.DividedFloatErr(2.0)
+		result, err := m.DividedRatErr(mustNewRatFromFloat64(t, 2.0))
 
 		require.NoError(t, err)
 		assert.True(t, result.IsValid())
-		expected := NewMoneyFloat("USD", 50.0) // 100 / 2.0 = 50
-		assert.True(t, result.Equal(expected))
-		// Original unchanged
+		assert.True(t, result.Equal(mustNewMoneyFloat(t, "USD", 50.0)))
 		assert.True(t, m.Equal(NewMoneyInt("USD", 100)))
 	})
 
-	t.Run("immutable DividedFloat - division by zero returns invalid", func(t *testing.T) {
+	t.Run("immutable DividedRat - division by zero returns invalid", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
 
-		result := m.DividedFloat(0.0)
+		result := m.DividedRat(zerorat.Zero())
 
 		assert.True(t, result.IsInvalid())
-		// Original unchanged
 		assert.True(t, m.IsValid())
 	})
 }

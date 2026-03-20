@@ -167,27 +167,6 @@ func (m Money) PercentedInt(value int64) Money {
 	return result
 }
 
-// PercentFloat calculates percentage of this Money using a float64 value (mutable operation).
-// Formula: m = m * (value / 100). Uses pointer receiver for mutable operation.
-func (m *Money) PercentFloat(value float64) error {
-	return m.Percent(zerorat.NewFromFloat64(value))
-}
-
-// PercentFloatErr returns percentage of this Money using a float64 value (immutable operation with error).
-// Uses value receiver for immutable operation.
-func (m Money) PercentFloatErr(value float64) (Money, error) {
-	result := m // copy
-	err := result.PercentFloat(value)
-	return result, err
-}
-
-// PercentedFloat returns percentage of this Money using a float64 value (immutable operation without error).
-// Returns invalid Money on error. Uses value receiver for immutable operation.
-func (m Money) PercentedFloat(value float64) Money {
-	result, _ := m.PercentFloatErr(value)
-	return result
-}
-
 // PercentMoney calculates this Money as percentage of another Money (mutable operation).
 // Formula: m = m * (other / 100). Requires same currency.
 // Uses pointer receiver for mutable operation.
@@ -257,47 +236,6 @@ func (m Money) AddedInt(value int64) Money {
 	return result
 }
 
-// AddFloat adds a float64 value to this Money (mutable operation).
-// Converts float64 to Rat and delegates to Money addition.
-func (m *Money) AddFloat(value float64) error {
-	if m.IsInvalid() {
-		return ErrMoneyInvalid
-	}
-
-	// Convert float64 to Rat
-	ratValue := zerorat.NewFromFloat64(value)
-
-	// Check if float conversion was invalid
-	if ratValue.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	// Delegate to Rat arithmetic
-	m.amount.Add(ratValue)
-
-	// Check if Rat operation resulted in invalid state
-	if m.amount.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	return nil
-}
-
-// AddedFloatErr returns the sum of this Money and a float64 value (immutable operation with error).
-func (m Money) AddedFloatErr(value float64) (Money, error) {
-	result := m // copy
-	err := result.AddFloat(value)
-	return result, err
-}
-
-// AddedFloat returns the sum of this Money and a float64 value (immutable operation without error).
-func (m Money) AddedFloat(value float64) Money {
-	result, _ := m.AddedFloatErr(value)
-	return result
-}
-
 // SubInt subtracts an int64 value from this Money (mutable operation).
 func (m *Money) SubInt(value int64) error {
 	if m.IsInvalid() {
@@ -332,46 +270,6 @@ func (m Money) SubtractedInt(value int64) Money {
 	return result
 }
 
-// SubFloat subtracts a float64 value from this Money (mutable operation).
-func (m *Money) SubFloat(value float64) error {
-	if m.IsInvalid() {
-		return ErrMoneyInvalid
-	}
-
-	// Convert float64 to Rat
-	ratValue := zerorat.NewFromFloat64(value)
-
-	// Check if float conversion was invalid
-	if ratValue.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	// Delegate to Rat arithmetic
-	m.amount.Sub(ratValue)
-
-	// Check if Rat operation resulted in invalid state
-	if m.amount.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	return nil
-}
-
-// SubtractedFloatErr returns the difference of this Money and a float64 value (immutable operation with error).
-func (m Money) SubtractedFloatErr(value float64) (Money, error) {
-	result := m // copy
-	err := result.SubFloat(value)
-	return result, err
-}
-
-// SubtractedFloat returns the difference of this Money and a float64 value (immutable operation without error).
-func (m Money) SubtractedFloat(value float64) Money {
-	result, _ := m.SubtractedFloatErr(value)
-	return result
-}
-
 // MulInt multiplies this Money by an int64 value (mutable operation).
 func (m *Money) MulInt(value int64) error {
 	if m.IsInvalid() {
@@ -403,46 +301,6 @@ func (m Money) MultipliedIntErr(value int64) (Money, error) {
 // MultipliedInt returns the product of this Money and an int64 value (immutable operation without error).
 func (m Money) MultipliedInt(value int64) Money {
 	result, _ := m.MultipliedIntErr(value)
-	return result
-}
-
-// MulFloat multiplies this Money by a float64 value (mutable operation).
-func (m *Money) MulFloat(value float64) error {
-	if m.IsInvalid() {
-		return ErrMoneyInvalid
-	}
-
-	// Convert float64 to Rat
-	ratValue := zerorat.NewFromFloat64(value)
-
-	// Check if float conversion was invalid
-	if ratValue.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	// Delegate to Rat arithmetic
-	m.amount.Mul(ratValue)
-
-	// Check if Rat operation resulted in invalid state
-	if m.amount.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	return nil
-}
-
-// MultipliedFloatErr returns the product of this Money and a float64 value (immutable operation with error).
-func (m Money) MultipliedFloatErr(value float64) (Money, error) {
-	result := m // copy
-	err := result.MulFloat(value)
-	return result, err
-}
-
-// MultipliedFloat returns the product of this Money and a float64 value (immutable operation without error).
-func (m Money) MultipliedFloat(value float64) Money {
-	result, _ := m.MultipliedFloatErr(value)
 	return result
 }
 
@@ -483,52 +341,6 @@ func (m Money) DividedIntErr(value int64) (Money, error) {
 // DividedInt returns the quotient of this Money and an int64 value (immutable operation without error).
 func (m Money) DividedInt(value int64) Money {
 	result, _ := m.DividedIntErr(value)
-	return result
-}
-
-// DivFloat divides this Money by a float64 value (mutable operation).
-func (m *Money) DivFloat(value float64) error {
-	if m.IsInvalid() {
-		return ErrMoneyInvalid
-	}
-
-	// Check for division by zero
-	if value == 0.0 {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	// Convert float64 to Rat
-	ratValue := zerorat.NewFromFloat64(value)
-
-	// Check if float conversion was invalid
-	if ratValue.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	// Delegate to Rat arithmetic
-	m.amount.Div(ratValue)
-
-	// Check if Rat operation resulted in invalid state
-	if m.amount.IsInvalid() {
-		m.Invalidate()
-		return ErrMoneyInvalid
-	}
-
-	return nil
-}
-
-// DividedFloatErr returns the quotient of this Money and a float64 value (immutable operation with error).
-func (m Money) DividedFloatErr(value float64) (Money, error) {
-	result := m // copy
-	err := result.DivFloat(value)
-	return result, err
-}
-
-// DividedFloat returns the quotient of this Money and a float64 value (immutable operation without error).
-func (m Money) DividedFloat(value float64) Money {
-	result, _ := m.DividedFloatErr(value)
 	return result
 }
 

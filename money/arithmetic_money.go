@@ -1,5 +1,7 @@
 package money
 
+import "github.com/n-r-w/zerorat"
+
 // Mul multiplies this Money by another Money (mutable operation).
 // Requires same currency. Result currency remains the same as operands.
 func (m *Money) Mul(other Money) error {
@@ -162,28 +164,28 @@ func (m Money) MultipliedManyInt(values ...int64) Money {
 	return result
 }
 
-// MulManyFloat multiplies this Money by multiple float64 values (mutable varargs operation).
+// MulManyRat multiplies this Money by multiple Rat values (mutable varargs operation).
 // Multiplies sequentially: m = m * v1 * v2 * ... * vN.
-func (m *Money) MulManyFloat(values ...float64) error {
+func (m *Money) MulManyRat(values ...zerorat.Rat) error {
 	for _, value := range values {
-		if err := m.MulFloat(value); err != nil {
+		if err := m.MulRat(value); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// MultipliedManyFloatErr returns the product of this Money and multiple float64 values
+// MultipliedManyRatErr returns the product of this Money and multiple Rat values
 // (immutable varargs operation with error).
-func (m Money) MultipliedManyFloatErr(values ...float64) (Money, error) {
+func (m Money) MultipliedManyRatErr(values ...zerorat.Rat) (Money, error) {
 	result := m // copy
-	err := result.MulManyFloat(values...)
+	err := result.MulManyRat(values...)
 	return result, err
 }
 
-// MultipliedManyFloat returns the product of this Money and multiple float64 values
+// MultipliedManyRat returns the product of this Money and multiple Rat values
 // (immutable varargs operation without error).
-func (m Money) MultipliedManyFloat(values ...float64) Money {
-	result, _ := m.MultipliedManyFloatErr(values...)
+func (m Money) MultipliedManyRat(values ...zerorat.Rat) Money {
+	result, _ := m.MultipliedManyRatErr(values...)
 	return result
 }

@@ -1,9 +1,9 @@
 package money
 
 import (
-	"math"
 	"testing"
 
+	"github.com/n-r-w/zerorat"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -295,71 +295,68 @@ func TestMoneyMulManyInt(t *testing.T) {
 	})
 }
 
-// TestMoneyMulManyFloat tests MulManyFloat varargs operations
-func TestMoneyMulManyFloat(t *testing.T) {
-	t.Run("mutable MulManyFloat - success", func(t *testing.T) {
-		m := NewMoneyInt("USD", 100) // 100 units
+// TestMoneyMulManyRat tests MulManyRat varargs operations.
+func TestMoneyMulManyRat(t *testing.T) {
+	t.Run("mutable MulManyRat - success", func(t *testing.T) {
+		m := NewMoneyInt("USD", 100)
 
-		err := m.MulManyFloat(2.0, 1.5) // multiply by 2.0, then 1.5
+		err := m.MulManyRat(zerorat.NewFromInt64(2), mustNewRatFromFloat64(t, 1.5))
 
 		require.NoError(t, err)
 		assert.True(t, m.IsValid())
-		expected := NewMoneyFloat("USD", 300.0) // 100 * 2.0 * 1.5 = 300.0
+		expected := mustNewMoneyFloat(t, "USD", 300.0)
 		assert.True(t, m.Equal(expected))
 	})
 
-	t.Run("mutable MulManyFloat - with zero", func(t *testing.T) {
+	t.Run("mutable MulManyRat - with zero", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
 
-		err := m.MulManyFloat(2.0, 0.0, 5.0) // multiply by 2.0, then 0.0, then 5.0
+		err := m.MulManyRat(zerorat.NewFromInt64(2), zerorat.Zero(), zerorat.NewFromInt64(5))
 
 		require.NoError(t, err)
 		assert.True(t, m.IsValid())
-		expected := ZeroMoney("USD")
-		assert.True(t, m.Equal(expected))
+		assert.True(t, m.Equal(ZeroMoney("USD")))
 	})
 
-	t.Run("mutable MulManyFloat - invalid float", func(t *testing.T) {
+	t.Run("mutable MulManyRat - invalid Rat", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
 
-		err := m.MulManyFloat(2.0, math.Inf(1)) // infinity
+		err := m.MulManyRat(zerorat.NewFromInt64(2), zerorat.Rat{})
 
 		require.Error(t, err)
 		assert.Equal(t, ErrMoneyInvalid, err)
 		assert.True(t, m.IsInvalid())
 	})
 
-	t.Run("mutable MulManyFloat - empty varargs", func(t *testing.T) {
+	t.Run("mutable MulManyRat - empty varargs", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
 		original := m.Amount()
 
-		err := m.MulManyFloat()
+		err := m.MulManyRat()
 
 		require.NoError(t, err)
 		assert.True(t, m.IsValid())
 		assert.True(t, m.Amount().Equal(original), "Money should be unchanged with empty varargs")
 	})
 
-	t.Run("immutable MultipliedManyFloatErr - success", func(t *testing.T) {
+	t.Run("immutable MultipliedManyRatErr - success", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
 
-		result, err := m.MultipliedManyFloatErr(2.0, 1.5)
+		result, err := m.MultipliedManyRatErr(zerorat.NewFromInt64(2), mustNewRatFromFloat64(t, 1.5))
 
 		require.NoError(t, err)
 		assert.True(t, result.IsValid())
-		expected := NewMoneyFloat("USD", 300.0) // 100 * 2.0 * 1.5 = 300.0
+		expected := mustNewMoneyFloat(t, "USD", 300.0)
 		assert.True(t, result.Equal(expected))
-		// Original unchanged
 		assert.True(t, m.Equal(NewMoneyInt("USD", 100)))
 	})
 
-	t.Run("immutable MultipliedManyFloat - invalid float returns invalid", func(t *testing.T) {
+	t.Run("immutable MultipliedManyRat - invalid Rat returns invalid", func(t *testing.T) {
 		m := NewMoneyInt("USD", 100)
 
-		result := m.MultipliedManyFloat(2.0, math.Inf(1)) // infinity
+		result := m.MultipliedManyRat(zerorat.NewFromInt64(2), zerorat.Rat{})
 
 		assert.True(t, result.IsInvalid())
-		// Original unchanged
 		assert.True(t, m.IsValid())
 	})
 }

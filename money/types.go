@@ -99,37 +99,33 @@ func NewMoneyIntErr(currency Currency, value int64) (Money, error) {
 	return NewMoneyErr(currency, amount)
 }
 
-// NewMoneyFloat creates a Money from a float64 value.
-// Returns invalid Money if currency is empty or float conversion fails.
-// Equivalent to NewMoney(currency, zerorat.NewFromFloat64(value)).
-func NewMoneyFloat(currency Currency, value float64) Money {
-	m, _ := NewMoneyFloatErr(currency, value)
-	return m
-}
-
-// NewMoneyFloat64Ptr creates a Money from a float64 pointer.
-func NewMoneyFloat64Ptr(currency Currency, value *float64) Money {
+// NewMoneyFloat64Ptr creates Money from a float64 pointer.
+// Nil returns the zero-value Money and nil error.
+func NewMoneyFloat64Ptr(currency Currency, value *float64) (Money, error) {
 	if value == nil {
-		return Money{}
+		return Money{}, nil
 	}
 	return NewMoneyFloat(currency, *value)
 }
 
-// NewMoneyFloat32Ptr creates a Money from a float32 pointer.
-func NewMoneyFloat32Ptr(currency Currency, value *float32) Money {
+// NewMoneyFloat32Ptr creates Money from a float32 pointer.
+// Nil returns the zero-value Money and nil error.
+func NewMoneyFloat32Ptr(currency Currency, value *float32) (Money, error) {
 	if value == nil {
-		return Money{}
+		return Money{}, nil
 	}
 	return NewMoneyFloat(currency, float64(*value))
 }
 
-// NewMoneyFloatErr creates a Money from a float64 value.
-// Returns invalid Money if currency is empty or float conversion fails.
-// Equivalent to NewMoney(currency, zerorat.NewFromFloat64(value)).
-func NewMoneyFloatErr(currency Currency, value float64) (Money, error) {
-	amount := zerorat.NewFromFloat64(value)
-	if amount.IsInvalid() {
-		return Money{}, ErrMoneyInvalid
+// NewMoneyFloat creates a Money from a float64 value.
+// The amount preserves the exact IEEE-754 binary float value.
+// It does not normalize decimal literals to currency precision.
+// Use integer minor units or fractions when decimal money semantics are intended.
+// Returns an error if currency is empty or float conversion fails.
+func NewMoneyFloat(currency Currency, value float64) (Money, error) {
+	amount, err := zerorat.NewFromFloat64(value)
+	if err != nil {
+		return Money{}, err
 	}
 
 	return NewMoneyErr(currency, amount)

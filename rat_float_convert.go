@@ -5,130 +5,142 @@ import (
 	"math/bits"
 )
 
-// float64ToRatExact converts a float64 to a rational using IEEE-754 decomposition.
-// It returns the exact rational m * 2^e when it fits into (int64 numerator, uint64 denominator).
-// If exact representation would overflow the type bounds, it returns an invalid Rat (denominator=0).
-//
-//nolint:gocognit,nestif,mnd // complexity and magic constants are acceptable here due to bit-level IEEE-754 handling
-func float64ToRatExact(value float64) Rat {
-	// Reject non-finite
-	if math.IsNaN(value) || math.IsInf(value, 0) {
-		return Rat{}
+// float64Parts describes a finite float64 as mantissa * 2^exponent.
+type float64Parts struct {
+	negative bool
+	mantissa uint64
+	exponent int
+}
+
+const (
+	float64SignBit          = 63
+	float64FractionBits     = 52
+	float64ExponentMask     = 0x7FF
+	float64ExponentBias     = 1023
+	float64SubnormalExp     = -1074
+	float64DenominatorLimit = 63
+	uint64BitWidth          = 64
+)
+
+// ratFromFloat64PartsExact converts already decomposed finite float parts into an exact Rat.
+func ratFromFloat64PartsExact(parts float64Parts) (Rat, error) {
+	if parts.exponent >= 0 {
+		if parts.exponent >= uint64BitWidth {
+			return Rat{}, ErrNotRepresentable
+		}
+
+		absLimit := uint64(math.MaxInt64)
+		if parts.negative {
+			absLimit++
+		}
+		if parts.mantissa > (absLimit >> uint(parts.exponent)) {
+			return Rat{}, ErrNotRepresentable
+		}
+
+		shifted := parts.mantissa << uint(parts.exponent)
+		// The absLimit guard above guarantees that this conversion fits.
+		numerator, _ := uint64ToInt64WithSign(shifted, parts.negative)
+		return Rat{numerator: numerator, denominator: 1}, nil
 	}
-	// Zero (incl. -0) handled here for completeness
+
+	denPow := -parts.exponent
+	if denPow > float64DenominatorLimit {
+		return Rat{}, ErrNotRepresentable
+	}
+
+	// Finite float64 mantissa fits safely into int64 after decomposition.
+	numerator, _ := uint64ToInt64WithSign(parts.mantissa, parts.negative)
+	return Rat{numerator: numerator, denominator: uint64(1) << uint(denPow)}, nil
+}
+
+// decomposeFiniteFloat64 normalizes a finite float64 into mantissa * 2^exponent.
+func decomposeFiniteFloat64(value float64) (float64Parts, bool, error) {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return float64Parts{}, false, ErrNonFiniteFloat
+	}
 	if value == 0 {
-		return Rat{numerator: 0, denominator: 1}
+		return float64Parts{}, true, nil
 	}
 
 	bits64 := math.Float64bits(value)
-	neg := (bits64 >> 63) != 0
-	// exponent bits are 11-bit value in [0, 2047]
-	expBits := int((bits64 >> 52) & 0x7FF) //nolint:gosec // bounded to 11 bits, safe int conversion
-	frac := bits64 & ((uint64(1) << 52) - 1)
+	parts := float64Parts{negative: (bits64 >> float64SignBit) != 0}
+	expBits := int((bits64 >> float64FractionBits) & float64ExponentMask)
+	frac := bits64 & ((uint64(1) << float64FractionBits) - 1)
 
-	var mant uint64
-	var e int // power of two exponent in value = mant * 2^e
 	if expBits == 0 {
-		// Subnormal: no implicit 1, unbiased exp is 1-1023, but value = frac * 2^-1074
-		// frac is non-zero here because value != 0
-		mant = frac
-		e = -1074
+		parts.mantissa = frac
+		parts.exponent = float64SubnormalExp
 	} else {
-		// Normalized: implicit leading 1
-		mant = (uint64(1) << 52) | frac
-		e = expBits - 1023 - 52
+		parts.mantissa = (uint64(1) << float64FractionBits) | frac
+		parts.exponent = expBits - float64ExponentBias - float64FractionBits
 	}
 
-	// Reduce common factors of 2 when e < 0 to keep denominator smaller
-	if e < 0 {
-		// Remove up to -e trailing zeros from mant
-		if tz := bits.TrailingZeros64(mant); tz > 0 {
-			if tz > -e {
-				mant >>= uint(-e)
-				e = 0
-			} else {
-				mant >>= uint(tz)
-				e += tz
-			}
+	if parts.exponent < 0 {
+		if tz := bits.TrailingZeros64(parts.mantissa); tz > 0 {
+			shift := min(tz, -parts.exponent)
+			parts.mantissa >>= uint(shift)
+			parts.exponent += shift
 		}
 	}
 
-	// Try to construct exact value; if too large, move some exponent into denominator (power-of-two)
-	if e >= 0 {
-		absLimit := uint64(math.MaxInt64)
-		limitBits := 63
-		if neg {
-			absLimit = uint64(math.MaxInt64) + 1 // allow -2^63
-			limitBits = 64
-		}
+	return parts, false, nil
+}
 
-		mantBits := bits.Len64(mant)
-		// Fast exact path: mant << e must fit absLimit
-		if e >= 0 && e < 64 {
-			shifted := mant << uint(e)
-			if mant <= (absLimit >> uint(e)) {
-				// shifted is <= absLimit by the guard above, safe to cast
-				n := int64(shifted) //nolint:gosec // guarded by absLimit check above
-				if neg {
-					n = -n
-				}
-				return Rat{numerator: n, denominator: 1}
-			}
-		}
-
-		// Need to offload some exponent to denominator 2^d so numerator fits
-		maxShiftAllowed := max(limitBits-mantBits, 0)
-		neededDenPow := max(e-maxShiftAllowed, 0)
-		if neededDenPow > 63 {
-			// Even with denom capped at 2^63, numerator still too large → invalid (overflow)
-			return Rat{}
-		}
-		newShift := e - neededDenPow
-		// Now mant << newShift must fit
-		if newShift < 0 || newShift >= 64 || mant > (absLimit>>uint(newShift)) {
-			return Rat{}
-		}
-		shifted := mant << uint(newShift)
-		// shifted is <= absLimit by the guard above, safe to cast
-		n := int64(shifted) //nolint:gosec // guarded by absLimit check above
-		if neg {
-			n = -n
-		}
-		// neededDenPow in [0,63] by guard above; safe shift
-		den := uint64(1) << uint(neededDenPow) //nolint:gosec // neededDenPow in [0,63] by guard above, safe shift
-		return Rat{numerator: n, denominator: den}
+// float64ToRatExact converts a float64 to an exact rational using IEEE-754 decomposition.
+// It returns ErrNonFiniteFloat for NaN and infinities.
+// It returns ErrNotRepresentable when the exact value does not fit into Rat.
+func float64ToRatExact(value float64) (Rat, error) {
+	parts, isZero, err := decomposeFiniteFloat64(value)
+	if err != nil {
+		return Rat{}, err
+	}
+	if isZero {
+		return Rat{numerator: 0, denominator: 1}, nil
 	}
 
-	// e < 0: choose denominator d = min(-e, 63) and compute nearest numerator by rounding
-	denPow := min(-e, 63)
-	shiftUp := e + denPow // <= 0
-	var n64 uint64
-	if shiftUp < 0 {
-		shift := uint(-shiftUp)
-		if shift >= 64 {
-			n64 = 0
-		} else {
-			base := mant >> shift
-			// Round-to-nearest-even on the truncated bits
-			mask := (uint64(1) << shift) - 1
-			rem := mant & mask
-			half := uint64(1) << (shift - 1)
-			if rem > half || (rem == half && (base&1) == 1) {
-				base++
-			}
-			n64 = base
+	return ratFromFloat64PartsExact(parts)
+}
+
+// float64ToRatApprox converts a float64 to the nearest representable Rat.
+// It returns ErrNonFiniteFloat for NaN and infinities.
+// It returns ErrNotRepresentable when the integer part does not fit into Rat.
+func float64ToRatApprox(value float64) (Rat, error) {
+	parts, isZero, err := decomposeFiniteFloat64(value)
+	if err != nil {
+		return Rat{}, err
+	}
+	if isZero {
+		return Rat{numerator: 0, denominator: 1}, nil
+	}
+
+	if parts.exponent >= 0 {
+		return ratFromFloat64PartsExact(parts)
+	}
+
+	denPow := -parts.exponent
+	if denPow <= float64DenominatorLimit {
+		return ratFromFloat64PartsExact(parts)
+	}
+
+	shift := uint(denPow - float64DenominatorLimit)
+	var rounded uint64
+	if shift < uint64BitWidth {
+		base := parts.mantissa >> shift
+		mask := (uint64(1) << shift) - 1
+		rem := parts.mantissa & mask
+		half := uint64(1) << (shift - 1)
+		if rem > half || (rem == half && (base&1) == 1) {
+			base++
 		}
-	} else {
-		// shiftUp == 0 → exact
-		n64 = mant
+		rounded = base
 	}
-	// n64 now fits well within int64 range (<= mant)
-	// n64 is derived from mant which fits in int64 after rounding; safe cast
-	n := int64(n64) //nolint:gosec // derived from mant and bounded, safe cast
-	if neg {
-		n = -n
+
+	// rounded is derived from the finite float64 mantissa and therefore fits into int64.
+	numerator, _ := uint64ToInt64WithSign(rounded, parts.negative)
+	if numerator == 0 {
+		return Rat{numerator: 0, denominator: 1}, nil
 	}
-	// denPow is in [0,63]; safe shift
-	den := uint64(1) << uint(denPow) //nolint:gosec // denPow is bounded in [0,63], safe shift
-	return Rat{numerator: n, denominator: den}
+	r := Rat{numerator: numerator, denominator: uint64(1) << float64DenominatorLimit}
+	r.Reduce()
+	return r, nil
 }
