@@ -107,21 +107,18 @@ There are two validation functions available:
 - zerorat.RegisterValidationFunc
 - money.RegisterValidationFunc
 
-## Performance vs big.Rat
+## Current benchmark snapshot
 
-| Operation | ZeroRat | big.Rat | Speedup |
-|-----------|---------|---------|---------|
-| Construction | 0.24 ns | 60 ns | **254x** |
-| Addition | 4.3 ns | 97 ns | **23x** |
-| Multiplication | 2.5 ns | 68 ns | **27x** |
-| Division | 3.0 ns | 68 ns | **23x** |
-| Comparison | 2.7 ns | 32 ns | **12x** |
-| Complex Expression | 13.9 ns | 303 ns | **22x** |
-| Array Operations (100 items) | 0.19 μs | 34 μs | **172x** |
+Benchmarks below were run in this session on **darwin/arm64 (Apple M4 Max)** with `go test -run '^$' -bench ... -benchmem ./...`.
 
-**Memory Allocations:**
-- ZeroRat: **0 allocs/op** for all arithmetic operations
-- big.Rat: 2-20 allocs/op depending on operation complexity
+| Benchmark | Time | Memory | Allocations |
+|-----------|------|--------|-------------|
+| `BenchmarkZeroRat_NewFromFloat64Exact` | 3.160 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_NewApproxFromFloat64` | 4.659 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_NewFromFloat32Exact` | 3.672 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkNewMoneyFloat` | 4.364 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkMoneyMulRat` | 4.034 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkMoneyDivRat` | 4.835 ns/op | 0 B/op | 0 allocs/op |
 
 ## Limitations
 
@@ -133,13 +130,8 @@ There are two validation functions available:
 
 ## Use Cases
 
-Perfect for:
 - High-frequency trading systems
 - Scientific computing with rational arithmetic  
 - Game engines using rational coordinates
 - Financial calculations requiring exact fractions
 - Any performance-critical rational number operations
-
-## License
-
-MIT License
