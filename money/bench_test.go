@@ -8,16 +8,14 @@ import (
 
 var (
 	benchmarkMoney Money
-	benchmarkErr   error
+	errBenchmark   error
 )
 
 // BenchmarkNewMoneyFloat measures exact float-to-money construction.
 func BenchmarkNewMoneyFloat(b *testing.B) {
 	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		benchmarkMoney, benchmarkErr = NewMoneyFloat("USD", 0.85)
+	for b.Loop() {
+		benchmarkMoney, errBenchmark = NewMoneyFloat("USD", 0.85)
 	}
 }
 
@@ -27,11 +25,9 @@ func BenchmarkMoneyMulRat(b *testing.B) {
 	scalar := zerorat.New(5, 2)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		m := value
-		benchmarkErr = m.MulRat(scalar)
+		errBenchmark = m.MulRat(scalar)
 		benchmarkMoney = m
 	}
 }
@@ -42,11 +38,9 @@ func BenchmarkMoneyDivRat(b *testing.B) {
 	scalar := zerorat.New(5, 2)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		m := value
-		benchmarkErr = m.DivRat(scalar)
+		errBenchmark = m.DivRat(scalar)
 		benchmarkMoney = m
 	}
 }

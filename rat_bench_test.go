@@ -8,23 +8,25 @@ import (
 
 var (
 	benchmarkRat Rat
-	benchmarkErr error
+	errBenchmark error
 )
 
 // BenchmarkZeroRat_Construction benchmarks ZeroRat construction
 func BenchmarkZeroRat_Construction(b *testing.B) {
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	i := 0
+	for b.Loop() {
 		_ = New(int64(i%1000), uint64((i%999)+1))
+		i++
 	}
 }
 
 // BenchmarkBigRat_Construction benchmarks big.Rat construction
 func BenchmarkBigRat_Construction(b *testing.B) {
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	i := 0
+	for b.Loop() {
 		r := big.NewRat(int64(i%1000), int64((i%999)+1))
 		_ = r
+		i++
 	}
 }
 
@@ -32,8 +34,7 @@ func BenchmarkBigRat_Construction(b *testing.B) {
 func BenchmarkZeroRat_Add(b *testing.B) {
 	r1 := New(3, 4)
 	r2 := New(1, 3)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := r1
 		r.Add(r2)
 		_ = r
@@ -44,8 +45,7 @@ func BenchmarkZeroRat_Add(b *testing.B) {
 func BenchmarkBigRat_Add(b *testing.B) {
 	r1 := big.NewRat(3, 4)
 	r2 := big.NewRat(1, 3)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := new(big.Rat).Set(r1)
 		r.Add(r, r2)
 		_ = r
@@ -56,8 +56,7 @@ func BenchmarkBigRat_Add(b *testing.B) {
 func BenchmarkZeroRat_AddImmutable(b *testing.B) {
 	r1 := New(3, 4)
 	r2 := New(1, 3)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := r1.Added(r2)
 		_ = r
 	}
@@ -67,8 +66,7 @@ func BenchmarkZeroRat_AddImmutable(b *testing.B) {
 func BenchmarkZeroRat_Mul(b *testing.B) {
 	r1 := New(3, 4)
 	r2 := New(5, 7)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := r1
 		r.Mul(r2)
 		_ = r
@@ -79,8 +77,7 @@ func BenchmarkZeroRat_Mul(b *testing.B) {
 func BenchmarkBigRat_Mul(b *testing.B) {
 	r1 := big.NewRat(3, 4)
 	r2 := big.NewRat(5, 7)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := new(big.Rat).Set(r1)
 		r.Mul(r, r2)
 		_ = r
@@ -91,8 +88,7 @@ func BenchmarkBigRat_Mul(b *testing.B) {
 func BenchmarkZeroRat_Div(b *testing.B) {
 	r1 := New(3, 4)
 	r2 := New(5, 7)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := r1
 		r.Div(r2)
 		_ = r
@@ -103,8 +99,7 @@ func BenchmarkZeroRat_Div(b *testing.B) {
 func BenchmarkBigRat_Div(b *testing.B) {
 	r1 := big.NewRat(3, 4)
 	r2 := big.NewRat(5, 7)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := new(big.Rat).Set(r1)
 		r.Quo(r, r2)
 		_ = r
@@ -115,8 +110,7 @@ func BenchmarkBigRat_Div(b *testing.B) {
 func BenchmarkZeroRat_Equal(b *testing.B) {
 	r1 := New(3, 4)
 	r2 := New(6, 8) // equivalent fraction
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		result := r1.Equal(r2)
 		_ = result
 	}
@@ -126,8 +120,7 @@ func BenchmarkZeroRat_Equal(b *testing.B) {
 func BenchmarkBigRat_Equal(b *testing.B) {
 	r1 := big.NewRat(3, 4)
 	r2 := big.NewRat(6, 8) // equivalent fraction
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		result := r1.Cmp(r2) == 0
 		_ = result
 	}
@@ -136,8 +129,7 @@ func BenchmarkBigRat_Equal(b *testing.B) {
 // BenchmarkZeroRat_String benchmarks ZeroRat string conversion
 func BenchmarkZeroRat_String(b *testing.B) {
 	r := New(355, 113) // approximation of π
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		s := r.String()
 		_ = s
 	}
@@ -146,8 +138,7 @@ func BenchmarkZeroRat_String(b *testing.B) {
 // BenchmarkBigRat_String benchmarks big.Rat string conversion
 func BenchmarkBigRat_String(b *testing.B) {
 	r := big.NewRat(355, 113) // approximation of π
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		s := r.String()
 		_ = s
 	}
@@ -162,8 +153,7 @@ func BenchmarkZeroRat_ComplexExpression(b *testing.B) {
 	d := New(2, 9)
 	e := New(11, 13)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Using immutable operations to avoid modifying original values
 		temp1 := a.Added(b1)             // 3/4 + 1/3
 		temp2 := c.Subtracted(d)         // 5/7 - 2/9
@@ -182,8 +172,7 @@ func BenchmarkBigRat_ComplexExpression(b *testing.B) {
 	d := big.NewRat(2, 9)
 	e := big.NewRat(11, 13)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		temp1 := new(big.Rat).Add(a, b1)        // 3/4 + 1/3
 		temp2 := new(big.Rat).Sub(c, d)         // 5/7 - 2/9
 		temp3 := new(big.Rat).Mul(temp1, temp2) // (3/4 + 1/3) * (5/7 - 2/9)
@@ -200,8 +189,7 @@ func BenchmarkZeroRat_ArrayOperations(b *testing.B) {
 		rationals[i] = New(int64(i+1), uint64(i+2))
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sum := Zero()
 		for j := range rationals {
 			sum.Add(rationals[j])
@@ -218,8 +206,7 @@ func BenchmarkBigRat_ArrayOperations(b *testing.B) {
 		rationals[i] = big.NewRat(int64(i+1), int64(i+2))
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sum := big.NewRat(0, 1)
 		for j := range rationals {
 			sum.Add(sum, rationals[j])
@@ -236,8 +223,7 @@ func BenchmarkZeroRat_MemoryAllocation(b *testing.B) {
 	r2 := New(5, 7)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Test various operations that should not allocate
 		r := r1
 		r.Add(r2)
@@ -278,8 +264,7 @@ func BenchmarkBigRat_MemoryAllocation(b *testing.B) {
 	r2 := big.NewRat(5, 7)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Test various operations
 		r := new(big.Rat).Set(r1)
 		r.Add(r, r2)
@@ -317,10 +302,8 @@ func BenchmarkBigRat_MemoryAllocation(b *testing.B) {
 // BenchmarkZeroRat_NewFromFloat64Exact measures exact float64 construction.
 func BenchmarkZeroRat_NewFromFloat64Exact(b *testing.B) {
 	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		benchmarkRat, benchmarkErr = NewFromFloat64(0.1)
+	for b.Loop() {
+		benchmarkRat, errBenchmark = NewFromFloat64(0.1)
 	}
 }
 
@@ -329,19 +312,15 @@ func BenchmarkZeroRat_NewApproxFromFloat64(b *testing.B) {
 	input := 3 * math.Ldexp(1, -64)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		benchmarkRat, benchmarkErr = NewApproxFromFloat64(input)
+	for b.Loop() {
+		benchmarkRat, errBenchmark = NewApproxFromFloat64(input)
 	}
 }
 
 // BenchmarkZeroRat_NewFromFloat32Exact measures exact float32 construction.
 func BenchmarkZeroRat_NewFromFloat32Exact(b *testing.B) {
 	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		benchmarkRat, benchmarkErr = NewFromFloat32(0.1)
+	for b.Loop() {
+		benchmarkRat, errBenchmark = NewFromFloat32(0.1)
 	}
 }
