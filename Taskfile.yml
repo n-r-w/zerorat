@@ -6,3 +6,7 @@ tasks:
   lint:
     cmds:
       - golangci-lint run ./...
+
+  build:
+    cmds:
+      - go build ./...
