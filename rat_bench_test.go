@@ -1,8 +1,14 @@
 package zerorat
 
 import (
+	"math"
 	"math/big"
 	"testing"
+)
+
+var (
+	benchmarkRat Rat
+	benchmarkErr error
 )
 
 // BenchmarkZeroRat_Construction benchmarks ZeroRat construction
@@ -305,5 +311,37 @@ func BenchmarkBigRat_MemoryAllocation(b *testing.B) {
 		_ = less
 		_ = sign
 		_ = isZero
+	}
+}
+
+// BenchmarkZeroRat_NewFromFloat64Exact measures exact float64 construction.
+func BenchmarkZeroRat_NewFromFloat64Exact(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		benchmarkRat, benchmarkErr = NewFromFloat64(0.1)
+	}
+}
+
+// BenchmarkZeroRat_NewApproxFromFloat64 measures approximate float64 construction.
+func BenchmarkZeroRat_NewApproxFromFloat64(b *testing.B) {
+	input := 3 * math.Ldexp(1, -64)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		benchmarkRat, benchmarkErr = NewApproxFromFloat64(input)
+	}
+}
+
+// BenchmarkZeroRat_NewFromFloat32Exact measures exact float32 construction.
+func BenchmarkZeroRat_NewFromFloat32Exact(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		benchmarkRat, benchmarkErr = NewFromFloat32(0.1)
 	}
 }
