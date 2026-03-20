@@ -7,8 +7,6 @@
 
 Zero-allocation rational number library for Go, providing big.Rat-like functionality without heap allocations.
 
-WARNING: This library is still in alpha and should not be used in production.
-
 ## Features
 
 - **Zero heap allocations** for arithmetic and comparison operations
