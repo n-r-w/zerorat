@@ -16,7 +16,7 @@ WARNING: This library is still in alpha and should not be used in production.
 - **Mutable and immutable APIs** for flexible usage
 - **Overflow-safe comparisons** using 128-bit arithmetic via math/bits package
 - **Overflow detection** with graceful invalid state handling
-- **Optional fraction reduction** using GCD algorithms (call Reduce() when needed)
+- **Optional fraction reduction** using greatest common divisor algorithm (call Reduce() when needed)
 - **Value semantics** with pointer receivers as requested
 
 ## Installation
