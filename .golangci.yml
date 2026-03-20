@@ -2,6 +2,12 @@ version: "2"
 run:
   issues-exit-code: 1
   tests: true
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
 linters:
   default: none
   enable:
@@ -32,6 +38,7 @@ linters:
     - gosec
     - govet
     - ineffassign
+    - intrange
     - lll
     - loggercheck
     - makezero
@@ -62,9 +69,29 @@ linters:
     - unparam
     - unused
     - usestdlibvars
+    - usetesting
     - wastedassign
     - whitespace
   settings:
+    unused:
+      # Mark all struct fields that have been written to as used.
+      # Default: true
+      field-writes-are-uses: true
+      # Treat IncDec statement (e.g. `i++` or `i--`) as both read and write operation instead of just write.
+      # Default: false
+      post-statements-are-reads: true
+      # Mark all exported fields as used.
+      # default: true
+      exported-fields-are-used: true
+      # Mark all function parameters as used.
+      # default: true
+      parameters-are-used: true
+      # Mark all local variables as used.
+      # default: true
+      local-variables-are-used: true
+      # Mark all identifiers inside generated files as used.
+      # Default: true
+      generated-is-used: true
     cyclop:
       max-complexity: 30
       package-average: 10
@@ -77,8 +104,9 @@ linters:
         - switch
         - map
     exhaustruct:
-      include:
-        - aa213sdfeiq32w123afnd # some trash in order to disable by default
+      include: []
+      exclude:
+        - ".*"
     gocognit:
       min-complexity: 30
     goconst:
@@ -102,8 +130,7 @@ linters:
           sizeThreshold: 512
         rangeValCopy:
           sizeThreshold: 512
-        ruleguard:
-          rules: ""
+        ruleguard: {}
     gomodguard:
       blocked:
         modules:
@@ -130,6 +157,9 @@ linters:
     inamedparam:
       skip-single-param: true
     mnd:
+      ignored-numbers:
+        - "1"
+        - "24" # hours in a day
       ignored-functions:
         - args.Error
         - flag.Arg
@@ -175,6 +205,9 @@ linters:
           disabled: true
         - name: max-public-structs
           disabled: true
+        - name: var-naming
+          # revive var-naming accepts ONLY two slices (allowlist & blocklist) of initialisms.
+          # We keep default behavior here (no custom initialisms).
     staticcheck:
       checks:
         - all
@@ -184,6 +217,7 @@ linters:
     rules:
       - linters:
           - dupl
+          - errcheck
           - gochecknoglobals
           - gocognit
           - goconst
@@ -192,14 +226,32 @@ linters:
           - gosec
           - govet
           - lll
+          - prealloc
+          - protogetter
           - revive
           - staticcheck
           - unparam
           - whitespace
         path: _test\.go
+      - linters:
+          - revive
+        text: "(var-naming: )?avoid meaningless package names"
+        source: "^package\\s+"
+    paths:
+      - third_party$
+      - builtin$
+
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 formatters:
   enable:
     - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - loadtest$
+      - profile$
+      - bench$
