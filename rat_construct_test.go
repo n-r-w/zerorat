@@ -482,274 +482,107 @@ func TestRat_IntegerAndFraction(t *testing.T) {
 	}
 }
 
-// TestNewFromFloat64 tests creation of rational number from float64 with minimum precision loss
+// TestNewFromFloat64 tests exact float64 construction.
 func TestNewFromFloat64(t *testing.T) {
 	tests := []struct {
-		name      string
-		value     float64
-		wantNum   int64
-		wantDenom uint64
+		name  string
+		value float64
+		want  Rat
 	}{
-		// Simple cases
-		{
-			name:      "zero",
-			value:     0.0,
-			wantNum:   0,
-			wantDenom: 1,
-		},
-		{
-			name:      "positive integer",
-			value:     42.0,
-			wantNum:   42,
-			wantDenom: 1,
-		},
-		{
-			name:      "negative integer",
-			value:     -17.0,
-			wantNum:   -17,
-			wantDenom: 1,
-		},
-		// Simple fractions
-		{
-			name:      "one half",
-			value:     0.5,
-			wantNum:   1,
-			wantDenom: 2,
-		},
-		{
-			name:      "negative one half",
-			value:     -0.5,
-			wantNum:   -1,
-			wantDenom: 2,
-		},
-		{
-			name:      "one quarter",
-			value:     0.25,
-			wantNum:   1,
-			wantDenom: 4,
-		},
-		{
-			name:      "three quarters",
-			value:     0.75,
-			wantNum:   3,
-			wantDenom: 4,
-		},
-		// Decimal fractions - these will be exact binary representations, not simplified decimals
-		// 0.1 in binary is exactly 3602879701896397/36028797018963968 after reduction
-		{
-			name:      "one tenth",
-			value:     0.1,
-			wantNum:   3602879701896397,
-			wantDenom: 36028797018963968,
-		},
-		// 0.01 in binary is exactly 5764607523034235/576460752303423488 after reduction
-		{
-			name:      "one hundredth",
-			value:     0.01,
-			wantNum:   5764607523034235,
-			wantDenom: 576460752303423488,
-		},
-		{
-			name:      "decimal 0.125",
-			value:     0.125,
-			wantNum:   1,
-			wantDenom: 8,
-		},
-		{
-			name:      "decimal 0.375",
-			value:     0.375,
-			wantNum:   3,
-			wantDenom: 8,
-		},
-		// Mixed numbers
-		{
-			name:      "one and half",
-			value:     1.5,
-			wantNum:   3,
-			wantDenom: 2,
-		},
-		{
-			name:      "two and quarter",
-			value:     2.25,
-			wantNum:   9,
-			wantDenom: 4,
-		},
-		{
-			name:      "negative mixed",
-			value:     -3.75,
-			wantNum:   -15,
-			wantDenom: 4,
-		},
+		{name: "zero", value: 0.0, want: Zero()},
+		{name: "negative zero", value: math.Copysign(0.0, -1), want: Zero()},
+		{name: "positive integer", value: 42.0, want: NewFromInt64(42)},
+		{name: "negative integer", value: -17.0, want: NewFromInt64(-17)},
+		{name: "one half", value: 0.5, want: New(1, 2)},
+		{name: "three quarters", value: 0.75, want: New(3, 4)},
+		{name: "one tenth exact binary", value: 0.1, want: New(3602879701896397, 36028797018963968)},
+		{name: "negative mixed", value: -3.75, want: New(-15, 4)},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewFromFloat64(tt.value)
-			assert.True(t, r.IsValid(), "rational should be valid")
-			assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
-			assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
+			r, err := NewFromFloat64(tt.value)
+			require.NoError(t, err)
+			assert.True(t, r.Equal(tt.want))
 		})
 	}
 }
 
-// TestNewFromFloat64_SpecialValues tests special float64 values
+// TestNewFromFloat64_SpecialValues tests special float64 values.
 func TestNewFromFloat64_SpecialValues(t *testing.T) {
-	tests := []struct {
-		name            string
-		value           float64
-		shouldBeInvalid bool
-	}{
-		{
-			name:            "positive infinity",
-			value:           math.Inf(1),
-			shouldBeInvalid: true,
-		},
-		{
-			name:            "negative infinity",
-			value:           math.Inf(-1),
-			shouldBeInvalid: true,
-		},
-		{
-			name:            "NaN",
-			value:           math.NaN(),
-			shouldBeInvalid: true,
-		},
-	}
+	_, err := NewFromFloat64(math.Inf(1))
+	require.ErrorIs(t, err, ErrNonFiniteFloat)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := NewFromFloat64(tt.value)
-			if tt.shouldBeInvalid {
-				assert.True(t, r.IsInvalid(), "should be invalid for %s (denominator should be 0)", tt.name)
-				assert.Equal(t, uint64(0), r.denominator, "invalid rational should have denominator = 0")
-			} else {
-				assert.True(t, r.IsValid(), "should be valid for %s", tt.name)
-				assert.Positive(t, r.denominator, "valid rational should have denominator > 0")
-			}
-		})
-	}
+	_, err = NewFromFloat64(math.Inf(-1))
+	require.ErrorIs(t, err, ErrNonFiniteFloat)
+
+	_, err = NewFromFloat64(math.NaN())
+	require.ErrorIs(t, err, ErrNonFiniteFloat)
 }
 
-// TestNewFromFloat64_PrecisionLoss tests that the constructor minimizes precision loss
-func TestNewFromFloat64_PrecisionLoss(t *testing.T) {
-	tests := []struct {
-		name        string
-		value       float64
-		description string
-	}{
-		{
-			name:        "repeating decimal 1/3",
-			value:       1.0 / 3.0,
-			description: "should find a good rational approximation for 1/3",
-		},
-		{
-			name:        "repeating decimal 2/3",
-			value:       2.0 / 3.0,
-			description: "should find a good rational approximation for 2/3",
-		},
-		{
-			name:        "pi approximation",
-			value:       3.141592653589793,
-			description: "should find a good rational approximation for pi",
-		},
-		{
-			name:        "e approximation",
-			value:       2.718281828459045,
-			description: "should find a good rational approximation for e",
-		},
-		{
-			name:        "very small positive",
-			value:       1e-10,
-			description: "should handle very small positive numbers",
-		},
-		{
-			name:        "very small negative",
-			value:       -1e-10,
-			description: "should handle very small negative numbers",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := NewFromFloat64(tt.value)
-			assert.True(t, r.IsValid(), "should be valid: %s", tt.description)
-
-			// Convert back to float64 and check that we're reasonably close
-			backToFloat := float64(r.numerator) / float64(r.denominator)
-			diff := math.Abs(backToFloat - tt.value)
-			relativeError := diff / math.Abs(tt.value)
-
-			// Allow for some reasonable tolerance (e.g., 1e-15 for most cases)
-			tolerance := 1e-15
-			if math.Abs(tt.value) < 1e-10 {
-				// For very small numbers, use absolute tolerance
-				tolerance = 1e-20
-			}
-
-			assert.True(t, relativeError < tolerance || diff < tolerance,
-				"precision loss too high: value=%g, rational=%d/%d, back=%g, diff=%g, rel_err=%g",
-				tt.value, r.numerator, r.denominator, backToFloat, diff, relativeError)
-		})
-	}
-}
-
-// TestNewFromFloat64_EdgeCases tests edge cases and boundary conditions
+// TestNewFromFloat64_EdgeCases tests exact edge cases and helper wrappers.
 func TestNewFromFloat64_EdgeCases(t *testing.T) {
-	tests := []struct {
-		name            string
-		value           float64
-		description     string
-		shouldBeInvalid bool // true if overflow to invalid state is expected
-	}{
-		{
-			name:        "max safe integer",
-			value:       9007199254740992.0, // 2^53, largest integer exactly representable in float64
-			description: "should handle max safe integer",
-		},
-		{
-			name:        "min safe integer",
-			value:       -9007199254740992.0, // -2^53
-			description: "should handle min safe integer",
-		},
-		{
-			name:        "smallest positive normal",
-			value:       math.SmallestNonzeroFloat64,
-			description: "should handle smallest positive normal float64",
-		},
-		{
-			name:            "largest finite",
-			value:           math.MaxFloat64,
-			description:     "largest finite float64 should overflow and become invalid",
-			shouldBeInvalid: true, // This must overflow int64/uint64 representable bounds
-		},
-		{
-			name:        "negative zero",
-			value:       math.Copysign(0.0, -1),
-			description: "should handle negative zero same as positive zero",
-		},
-	}
+	_, err := NewFromFloat64(math.MaxFloat64)
+	require.ErrorIs(t, err, ErrNotRepresentable)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := NewFromFloat64(tt.value)
+	_, err = NewFromFloat64(math.SmallestNonzeroFloat64)
+	require.ErrorIs(t, err, ErrNotRepresentable)
 
-			if tt.shouldBeInvalid {
-				// For values that must overflow, the result should be invalid
-				assert.True(t, r.IsInvalid(), "%s should be invalid due to overflow", tt.name)
-				assert.Equal(t, uint64(0), r.denominator, "invalid rational should have denominator = 0")
-				return
-			}
+	_, err = NewFromFloat64(math.Ldexp(1, -64))
+	require.ErrorIs(t, err, ErrNotRepresentable)
 
-			assert.True(t, r.IsValid(), "should be valid: %s", tt.description)
-			assert.Positive(t, r.denominator, "valid rational should have denominator > 0")
+	_, err = NewFromFloat64(3 * math.Ldexp(1, -64))
+	require.ErrorIs(t, err, ErrNotRepresentable)
 
-			// For negative zero, should be same as positive zero
-			if tt.value == 0.0 || tt.value == math.Copysign(0.0, -1) {
-				assert.Equal(t, int64(0), r.numerator, "zero should have numerator 0")
-				assert.Equal(t, uint64(1), r.denominator, "zero should have denominator 1")
-			}
-		})
-	}
+	v := 0.25
+	r, err := NewFromFloat64Ptr(&v)
+	require.NoError(t, err)
+	assert.True(t, r.Equal(New(1, 4)))
+
+	values, err := FromFloat64Slice([]float64{0.5, 0.25})
+	require.NoError(t, err)
+	require.Len(t, values, 2)
+	assert.True(t, values[0].Equal(New(1, 2)))
+	assert.True(t, values[1].Equal(New(1, 4)))
+}
+
+// TestNewFromFloat32 tests float32 exact and approximate wrappers.
+func TestNewFromFloat32(t *testing.T) {
+	r, err := NewFromFloat32(0.5)
+	require.NoError(t, err)
+	assert.True(t, r.Equal(New(1, 2)))
+
+	_, err = NewFromFloat32(math.SmallestNonzeroFloat32)
+	require.ErrorIs(t, err, ErrNotRepresentable)
+
+	r, err = NewApproxFromFloat32(math.SmallestNonzeroFloat32)
+	require.NoError(t, err)
+	assert.True(t, r.Equal(Zero()))
+
+	v := float32(0.25)
+	r, err = NewFromFloat32Ptr(&v)
+	require.NoError(t, err)
+	assert.True(t, r.Equal(New(1, 4)))
+
+	r, err = NewFromFloat32Ptr(nil)
+	require.NoError(t, err)
+	assert.True(t, r.IsInvalid())
+}
+
+// TestFromFloat64SlicePtr tests pointer slice conversion.
+func TestFromFloat64SlicePtr(t *testing.T) {
+	a := 0.5
+	b := 0.25
+	values, err := FromFloat64SlicePtr([]*float64{&a, nil, &b})
+	require.NoError(t, err)
+	require.Len(t, values, 3)
+	assert.True(t, values[0].Equal(New(1, 2)))
+	assert.True(t, values[1].IsInvalid())
+	assert.True(t, values[2].Equal(New(1, 4)))
+
+	nan := math.NaN()
+	_, err = FromFloat64SlicePtr([]*float64{&a, &nan})
+	require.ErrorIs(t, err, ErrNonFiniteFloat)
 }
 
 // TestRat_ToInt64Err tests the ToInt64Err method

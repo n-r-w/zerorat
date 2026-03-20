@@ -298,58 +298,6 @@ func (r Rat) DividedInt(value int64) Rat {
 	return result
 }
 
-// AddFloat adds a float64 value to the current rational number (mutable operation).
-func (r *Rat) AddFloat(value float64) {
-	r.Add(float64ToRatExact(value))
-}
-
-// AddedFloat returns the sum of current and a float64 value (immutable operation).
-// Doesn't modify the original rational number.
-func (r Rat) AddedFloat(value float64) Rat {
-	result := r // make a copy
-	result.AddFloat(value)
-	return result
-}
-
-// SubFloat subtracts a float64 value from the current rational number (mutable operation).
-func (r *Rat) SubFloat(value float64) {
-	r.Sub(float64ToRatExact(value))
-}
-
-// SubtractedFloat returns the difference of current and a float64 value (immutable operation).
-// Doesn't modify the original rational number.
-func (r Rat) SubtractedFloat(value float64) Rat {
-	result := r // make a copy
-	result.SubFloat(value)
-	return result
-}
-
-// MulFloat multiplies the current rational number by a float64 value (mutable operation).
-func (r *Rat) MulFloat(value float64) {
-	r.Mul(float64ToRatExact(value))
-}
-
-// MultipliedFloat returns the product of current and a float64 value (immutable operation).
-// Doesn't modify the original rational number.
-func (r Rat) MultipliedFloat(value float64) Rat {
-	result := r // make a copy
-	result.MulFloat(value)
-	return result
-}
-
-// DivFloat divides the current rational number by a float64 value (mutable operation).
-func (r *Rat) DivFloat(value float64) {
-	r.Div(float64ToRatExact(value))
-}
-
-// DividedFloat returns the quotient of current divided by a float64 value (immutable operation).
-// Doesn't modify the original rational number.
-func (r Rat) DividedFloat(value float64) Rat {
-	result := r // make a copy
-	result.DivFloat(value)
-	return result
-}
-
 // Invert inverts the current rational number (mutable operation).
 // Formula: a/b -> b/a (with sign moved to numerator)
 // Sets invalid state on zero inversion or overflow.

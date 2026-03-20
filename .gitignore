@@ -1,4 +1,5 @@
-/.augment
 /.serena
 .DS_Store
 /example
+/.vscode
+cover.out

@@ -59,13 +59,13 @@ func mulInt64ByUint64ToInt64(a int64, b uint64) (int64, bool) {
 		return 0, false
 	}
 	if neg {
-		limit := uint64(math.MaxInt64) + 1 // allow MinInt64 magnitude
-		if lo > limit {
+		if lo > uint64(math.MaxInt64) {
+			if lo == uint64(math.MaxInt64)+1 {
+				return math.MinInt64, true
+			}
 			return 0, false
 		}
-		if lo == limit {
-			return math.MinInt64, true
-		}
+
 		return -int64(lo), true
 	}
 	// positive result
@@ -79,13 +79,13 @@ func mulInt64ByUint64ToInt64(a int64, b uint64) (int64, bool) {
 // Returns ok=false if magnitude cannot be represented in int64 with the given sign.
 func uint64ToInt64WithSign(u uint64, neg bool) (int64, bool) {
 	if neg {
-		limit := uint64(math.MaxInt64) + 1
-		if u > limit {
+		if u > uint64(math.MaxInt64) {
+			if u == uint64(math.MaxInt64)+1 {
+				return math.MinInt64, true
+			}
 			return 0, false
 		}
-		if u == limit {
-			return math.MinInt64, true
-		}
+
 		return -int64(u), true
 	}
 	if u > uint64(math.MaxInt64) {
@@ -296,12 +296,13 @@ func roundDivision(numerator int64, denominator uint64, roundType RoundType) int
 		return quotient
 	}
 
+	if roundType != RoundDown && roundType != RoundUp && roundType != RoundHalfUp {
+		return quotient
+	}
+
 	// Apply rounding strategy
 	switch roundType {
 	case RoundDown:
-		// Truncate toward zero (no adjustment needed)
-		return quotient
-
 	case RoundUp:
 		// Round away from zero
 		if numerator > 0 {
@@ -343,6 +344,8 @@ func roundDivision(numerator int64, denominator uint64, roundType RoundType) int
 	default:
 		return quotient
 	}
+
+	return quotient
 }
 
 // RegisterValidationFunc registers a custom validation function for Rat types.

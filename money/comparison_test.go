@@ -379,7 +379,7 @@ func TestMoney_IsZero(t *testing.T) {
 		})
 
 		t.Run("zero from NewMoneyFloat with 0.0", func(t *testing.T) {
-			m := NewMoneyFloat("GBP", 0.0)
+			m := mustNewMoneyFloat(t, "GBP", 0.0)
 
 			result := m.IsZero()
 
@@ -429,7 +429,7 @@ func TestMoney_IsZero(t *testing.T) {
 		})
 
 		t.Run("positive float", func(t *testing.T) {
-			m := NewMoneyFloat("GBP", 1.23)
+			m := mustNewMoneyFloat(t, "GBP", 1.23)
 
 			result := m.IsZero()
 
@@ -437,7 +437,7 @@ func TestMoney_IsZero(t *testing.T) {
 		})
 
 		t.Run("negative float", func(t *testing.T) {
-			m := NewMoneyFloat("CHF", -2.50)
+			m := mustNewMoneyFloat(t, "CHF", -2.50)
 
 			result := m.IsZero()
 

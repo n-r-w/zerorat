@@ -9,6 +9,10 @@ import (
 var (
 	// ErrInvalid indicates that a Rat value is in an invalid state.
 	ErrInvalid = errors.New("invalid rat")
+	// ErrNonFiniteFloat indicates that a float input is NaN or infinite.
+	ErrNonFiniteFloat = errors.New("non-finite float")
+	// ErrNotRepresentable indicates that a finite float cannot be represented in Rat.
+	ErrNotRepresentable = errors.New("float not representable as rat")
 )
 
 // RoundType defines rounding strategies for rounding rationals to integers.
@@ -76,47 +80,47 @@ func NewFromIntPtr(value *int) Rat {
 	return NewFromInt64(int64(*value))
 }
 
-// NewFromFloat64 creates a rational number from a float64 with minimum precision loss.
-// Returns invalid state (denominator = 0) for special values: NaN, +Inf, -Inf.
-// Returns invalid state if the conversion would overflow int64/uint64 limits.
-func NewFromFloat64(value float64) (r Rat) {
-	// Handle special cases
-	if math.IsNaN(value) || math.IsInf(value, 0) {
-		return Rat{numerator: 0, denominator: 0} // invalid state
-	}
+// NewFromFloat64 creates a rational number from a float64 without changing its value.
+// Returns ErrNonFiniteFloat for NaN and infinities.
+// Returns ErrNotRepresentable if the exact value does not fit into Rat.
+func NewFromFloat64(value float64) (Rat, error) {
+	return float64ToRatExact(value)
+}
 
-	// Handle zero (including negative zero)
-	if value == 0.0 {
-		return Rat{numerator: 0, denominator: 1}
-	}
-
-	// Use IEEE 754 decomposition for exact conversion.
-	// Note: NewFromFloat64 must invalidate on overflow; float64ToRatExact returns Rat{}
-	// when representation would exceed int64/uint64 bounds.
-	r = float64ToRatExact(value)
-	if r.IsValid() {
-		r.Reduce()
-	}
-	return r
+// NewApproxFromFloat64 creates a rational number from a float64 using the approximation rule.
+// If the exact denominator would exceed 2^63, it rounds to the nearest representable Rat
+// on the 1/2^63 grid, using ties-to-even on the scaled numerator.
+// Returns ErrNonFiniteFloat for NaN and infinities.
+// Returns ErrNotRepresentable if the value is outside the representable range of Rat.
+func NewApproxFromFloat64(value float64) (Rat, error) {
+	return float64ToRatApprox(value)
 }
 
 // NewFromFloat64Ptr creates a rational number from a float64 pointer.
-func NewFromFloat64Ptr(value *float64) Rat {
+// Nil returns the zero-value Rat and nil error.
+func NewFromFloat64Ptr(value *float64) (Rat, error) {
 	if value == nil {
-		return Rat{}
+		return Rat{}, nil
 	}
 	return NewFromFloat64(*value)
 }
 
-// NewFromFloat32 creates a rational number from a float32 with minimum precision loss.
-func NewFromFloat32(value float32) Rat {
+// NewFromFloat32 creates a rational number from a float32 without changing its value.
+func NewFromFloat32(value float32) (Rat, error) {
 	return NewFromFloat64(float64(value))
 }
 
+// NewApproxFromFloat32 creates a rational number from a float32
+// using the same approximation rule as NewApproxFromFloat64.
+func NewApproxFromFloat32(value float32) (Rat, error) {
+	return NewApproxFromFloat64(float64(value))
+}
+
 // NewFromFloat32Ptr creates a rational number from a float32 pointer.
-func NewFromFloat32Ptr(value *float32) Rat {
+// Nil returns the zero-value Rat and nil error.
+func NewFromFloat32Ptr(value *float32) (Rat, error) {
 	if value == nil {
-		return Rat{}
+		return Rat{}, nil
 	}
 	return NewFromFloat64(float64(*value))
 }
@@ -182,22 +186,27 @@ func FromIntSlicePtr(values []*int) []Rat {
 }
 
 // FromFloat64Slice creates a rational slice from a float64 slice.
-func FromFloat64Slice(values []float64) []Rat {
+func FromFloat64Slice(values []float64) ([]Rat, error) {
 	if values == nil {
-		return nil
+		return nil, nil
 	}
 
 	result := make([]Rat, len(values))
 	for i, v := range values {
-		result[i] = NewFromFloat64(v)
+		r, err := NewFromFloat64(v)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = r
 	}
-	return result
+	return result, nil
 }
 
 // FromFloat64SlicePtr creates a rational slice from a float64 slice pointer.
-func FromFloat64SlicePtr(values []*float64) []Rat {
+// Nil entries are preserved as zero-value Rat entries.
+func FromFloat64SlicePtr(values []*float64) ([]Rat, error) {
 	if values == nil {
-		return nil
+		return nil, nil
 	}
 
 	result := make([]Rat, len(values))
@@ -205,10 +214,14 @@ func FromFloat64SlicePtr(values []*float64) []Rat {
 		if v == nil {
 			result[i] = Rat{}
 		} else {
-			result[i] = NewFromFloat64(*v)
+			r, err := NewFromFloat64(*v)
+			if err != nil {
+				return nil, err
+			}
+			result[i] = r
 		}
 	}
-	return result
+	return result, nil
 }
 
 // Zero returns a rational number representing zero (0/1).
