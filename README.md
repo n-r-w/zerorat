@@ -135,3 +135,7 @@ Benchmarks below were run in this session on **darwin/arm64 (Apple M4 Max)** wit
 - Game engines using rational coordinates
 - Financial calculations requiring exact fractions
 - Any performance-critical rational number operations
+
+## Agents Skill
+
+[ZeroRat Agents Skill](docs/zerorat/SKILL.md)
