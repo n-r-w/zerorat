@@ -91,6 +91,11 @@ Prefer mutable methods when the caller clearly wants in-place updates. Prefer im
 - `Rat.String()` returns rational text such as `23/4`.
 - `Rat.ToDecimalString()` returns an exact finite decimal string such as `0.35` or `12.5`.
 - `Rat.ToDecimalString()` returns `ErrNonTerminatingDecimal` for values like `1/3` and `ErrInvalid` for invalid `Rat` values.
+- `Rat` implements `encoding/json` support directly.
+- `Rat.MarshalJSON()` writes an unquoted JSON number only for exact finite decimals and returns `ErrInvalid` or `ErrNonTerminatingDecimal` otherwise.
+- `Rat.UnmarshalJSON()` accepts JSON numbers and quoted decimal/scientific strings such as `0.35`, `3.5e-1`, `"0.35"`, and `"3.5e-1"`.
+- `Rat.UnmarshalJSON()` rejects quoted rational text such as `"1/3"`; quoted input must still match `NewFromDecimalString`.
+- `Rat.UnmarshalJSON()` treats `null` as an invalid state for value fields. For optional fields, prefer `*Rat`, where JSON `null` maps to `nil` by standard `encoding/json` behavior.
 - `zerorat.NewFromBigRat()` returns `ErrNilBigRat` for `nil` input and `ErrNotRepresentable` when the exact value does not fit package limits.
 - `Rat.ToBigRatErr()` returns an exact `*big.Rat` for valid values and `ErrInvalid` for invalid `Rat` values.
 - `Money.String()` returns slash-separated rational text such as:

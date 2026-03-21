@@ -79,6 +79,40 @@ valid := a.IsValid()     // true/false
 _ = backToBig
 ```
 
+## JSON support
+
+`Rat` can be used directly with `encoding/json`.
+
+- `MarshalJSON` writes a JSON number without quotes when the value has an exact finite decimal form
+- `MarshalJSON` returns `ErrInvalid` for invalid `Rat` values
+- `MarshalJSON` returns `ErrNonTerminatingDecimal` for values like `1/3` that cannot be written as an exact JSON number
+- `UnmarshalJSON` accepts JSON numbers such as `0.35` and `3.5e-1`
+- `UnmarshalJSON` also accepts quoted decimal text such as `"0.35"` and `"3.5e-1"`
+- `UnmarshalJSON` rejects quoted rational text such as `"1/3"`; quoted input must still match `NewFromDecimalString`
+- `UnmarshalJSON` treats `null` as an invalid `Rat` state for value fields
+- Failed `UnmarshalJSON` calls also leave the receiver invalid, so bad payloads do not preserve stale values
+- For optional fields, prefer `*Rat`; JSON `null` maps to `nil` by standard `encoding/json` behavior
+
+```go
+type payload struct {
+    Rate zerorat.Rat `json:"rate"`
+}
+
+var p payload
+
+err := json.Unmarshal([]byte(`{"rate":"3.5e-1"}`), &p)
+if err != nil {
+    // handle invalid decimal input
+}
+
+data, err := json.Marshal(payload{Rate: zerorat.New(7, 20)})
+if err != nil {
+    // handle invalid or non-terminating values like 1/3
+}
+
+_ = data // {"rate":0.35}
+```
+
 ## Money package
 
 Currency-aware monetary calculations built on top of ZeroRat. Provides type-safe money operations with automatic currency validation, rounding modes, and formatting support. Ensures operations only occur between compatible currencies while maintaining ZeroRat's zero-allocation performance characteristics.
