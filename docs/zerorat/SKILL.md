@@ -43,9 +43,11 @@ Use `money.Money` for:
 - Use `zerorat.Zero()` for valid zero and `zerorat.One()` for valid one.
 - Use `zerorat.New(numerator, denominator)` for exact fractions.
 - Use `zerorat.NewFromInt64` / `zerorat.NewFromInt` for whole numbers.
+- Use `zerorat.NewFromDecimalString` when the input is an exact decimal literal or scientific notation string such as `"0.35"` or `"3.5e-1"`.
+- Use `zerorat.NewFromBigRat` when the caller already has a `*big.Rat` and wants an exact `Rat` if it fits the package limits.
 - Use `zerorat.NewFromFloat64` / `zerorat.NewFromFloat32` when you need the exact IEEE-754 value.
 - Use `zerorat.NewApproxFromFloat64` / `zerorat.NewApproxFromFloat32` only when approximation is acceptable and explicit.
-- Pointer constructors return an invalid `Rat{}` on `nil` input.
+- Pointer helper constructors such as `zerorat.NewFromInt64Ptr`, `zerorat.NewFromIntPtr`, `zerorat.NewFromFloat64Ptr`, and `zerorat.NewFromFloat32Ptr` return an invalid `Rat{}` on `nil` input.
 
 ### `money.Money`
 - `Money{}` is invalid. Use `money.ZeroMoney(currency)` for a valid zero amount.
@@ -87,6 +89,10 @@ Prefer mutable methods when the caller clearly wants in-place updates. Prefer im
 ## Formatting and parsing
 
 - `Rat.String()` returns rational text such as `23/4`.
+- `Rat.ToDecimalString()` returns an exact finite decimal string such as `0.35` or `12.5`.
+- `Rat.ToDecimalString()` returns `ErrNonTerminatingDecimal` for values like `1/3` and `ErrInvalid` for invalid `Rat` values.
+- `zerorat.NewFromBigRat()` returns `ErrNilBigRat` for `nil` input and `ErrNotRepresentable` when the exact value does not fit package limits.
+- `Rat.ToBigRatErr()` returns an exact `*big.Rat` for valid values and `ErrInvalid` for invalid `Rat` values.
 - `Money.String()` returns slash-separated rational text such as:
   - `USD/123/100`
   - `GBP/42`
@@ -115,8 +121,22 @@ When helping a user:
 ## Example patterns
 
 ```go
+import "math/big"
+
 // Exact ratio.
 discountRate := zerorat.New(15, 100)
+
+// Exact decimal input.
+taxRate, err := zerorat.NewFromDecimalString("7.5e-2")
+if err != nil {
+  return err
+}
+
+// Exact interop with math/big.
+ratioFromBig, err := zerorat.NewFromBigRat(big.NewRat(7, 20))
+if err != nil {
+  return err
+}
 
 // Exact money amount from a fraction.
 price := money.NewMoneyFromFraction(1299, 100, "USD")
@@ -134,11 +154,27 @@ taxValue := price.MultipliedRat(rate)
 if taxValue.IsInvalid() {
   // handle invalid result
 }
+
+taxRateText, err := taxRate.ToDecimalString()
+if err != nil {
+    return err
+}
+
+_ = taxRateText // "0.075"
+
+ratioBig, err := ratioFromBig.ToBigRatErr()
+if err != nil {
+  return err
+}
+
+_ = ratioBig
 ```
 
 ## Common pitfalls
 
 - Treating `Rat{}` or `Money{}` as valid zero.
+- Assuming every `Rat` can be formatted as a finite decimal string.
+- Assuming every `*big.Rat` can be converted into `Rat` without checking package limits.
 - Assuming arithmetic auto-reduces.
 - Using `NewMoneyFloat` for decimal currency semantics.
 - Assuming `Money.String()` is user-facing display formatting.
