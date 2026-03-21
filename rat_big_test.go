@@ -68,9 +68,9 @@ func TestNewFromBigRat_InvalidInputs(t *testing.T) {
 		checkText string
 	}{
 		{
-			name:      "nil input",
-			input:     nil,
-			checkText: "nil big.Rat",
+			name:    "nil input",
+			input:   nil,
+			wantErr: ErrNilBigRat,
 		},
 		{
 			name:    "numerator overflow",

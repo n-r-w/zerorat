@@ -1,14 +1,13 @@
 package zerorat
 
 import (
-	"errors"
 	"math/big"
 )
 
 // NewFromBigRat creates a rational number from a big.Rat value.
 func NewFromBigRat(value *big.Rat) (Rat, error) {
 	if value == nil {
-		return Rat{}, errors.New("nil big.Rat")
+		return Rat{}, ErrNilBigRat
 	}
 
 	numerator := value.Num()

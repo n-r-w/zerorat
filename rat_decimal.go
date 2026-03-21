@@ -24,6 +24,16 @@ var (
 	ErrNonTerminatingDecimal = errors.New("non-terminating decimal")
 	// decimalNumberPattern matches plain decimal and scientific-notation inputs.
 	decimalNumberPattern = regexp.MustCompile(`^(?P<int>[-+]?\d*)?(?:\.(?P<dec>\d*))?(?:[Ee](?P<exp>[-+]?\d+))?$`)
+	//nolint:gochecknoglobals // Cached big.Int values remove repeated allocations in decimal parsing helpers.
+	decimalBigTwo = big.NewInt(decimalFactorTwo)
+	//nolint:gochecknoglobals // Cached big.Int values remove repeated allocations in decimal parsing helpers.
+	decimalBigFive = big.NewInt(decimalFactorFive)
+	//nolint:gochecknoglobals // Cached big.Int values remove repeated allocations in decimal parsing helpers.
+	decimalBigTen = big.NewInt(decimalBase)
+	//nolint:gochecknoglobals // Cached big.Int values remove repeated allocations in decimal parsing helpers.
+	decimalMaxAbsInt64 = new(big.Int).SetUint64(uint64(math.MaxInt64) + 1)
+	//nolint:gochecknoglobals // Cached big.Int values remove repeated allocations in decimal parsing helpers.
+	decimalMaxAbsInt64Div10 = new(big.Int).Quo(new(big.Int).SetUint64(uint64(math.MaxInt64)+1), decimalBigTen)
 )
 
 // NewFromDecimalString creates a rational number from an exact decimal string.
@@ -184,7 +194,7 @@ func scaleDecimalMagnitude(magnitude *big.Int, factorExp int64, isNegative bool)
 		if wouldDecimalScaleOverflow(magnitude) {
 			return 0, ErrNotRepresentable
 		}
-		magnitude.Mul(magnitude, big.NewInt(decimalBase))
+		magnitude.Mul(magnitude, decimalBigTen)
 	}
 
 	numerator, ok := signedBigIntToInt64(magnitude, isNegative)
@@ -213,8 +223,7 @@ func reduceDecimalScale(magnitude *big.Int, scale int64) (twoExp, fiveExp int64)
 
 // wouldDecimalScaleOverflow reports whether multiplying by ten would exceed Rat numerator bounds.
 func wouldDecimalScaleOverflow(magnitude *big.Int) bool {
-	limit := new(big.Int).Quo(maxAbsInt64Big(), big.NewInt(decimalBase))
-	return magnitude.Cmp(limit) > 0
+	return magnitude.Cmp(decimalMaxAbsInt64Div10) > 0
 }
 
 // divideBigIntIfDivisibleWithBigFactor divides a big integer by a big factor only when division is exact.
@@ -231,6 +240,14 @@ func divideBigIntIfDivisibleWithBigFactor(value, factor *big.Int) bool {
 
 // divideBigIntIfDivisibleBySmallFactor divides a big integer by a small factor only when division is exact.
 func divideBigIntIfDivisibleBySmallFactor(value *big.Int, factor int64) bool {
+	if factor == decimalFactorTwo {
+		return divideBigIntIfDivisibleWithBigFactor(value, decimalBigTwo)
+	}
+
+	if factor == decimalFactorFive {
+		return divideBigIntIfDivisibleWithBigFactor(value, decimalBigFive)
+	}
+
 	return divideBigIntIfDivisibleWithBigFactor(value, big.NewInt(factor))
 }
 
@@ -258,11 +275,10 @@ func decimalDenominator(twoExp, fiveExp int64) (uint64, bool) {
 // signedBigIntToInt64 converts a positive magnitude and sign into an int64 numerator.
 func signedBigIntToInt64(magnitude *big.Int, isNegative bool) (int64, bool) {
 	if isNegative {
-		maxAbs := maxAbsInt64Big()
-		if magnitude.Cmp(maxAbs) > 0 {
+		if magnitude.Cmp(decimalMaxAbsInt64) > 0 {
 			return 0, false
 		}
-		if magnitude.Cmp(maxAbs) == 0 {
+		if magnitude.Cmp(decimalMaxAbsInt64) == 0 {
 			return math.MinInt64, true
 		}
 
@@ -308,11 +324,6 @@ func nextDecimalDigit(remainder, denominator uint64) (digit byte, nextRemainder 
 	}
 
 	return "0123456789"[quotient], nextRemainder, true
-}
-
-// maxAbsInt64Big returns the largest absolute numerator magnitude representable by Rat.
-func maxAbsInt64Big() *big.Int {
-	return new(big.Int).SetUint64(uint64(math.MaxInt64) + 1)
 }
 
 // checkedInt64Sub subtracts two int64 values and reports whether the result fits in int64.

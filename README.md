@@ -43,7 +43,7 @@ if err != nil {
 
 fromBig, err := NewFromBigRat(big.NewRat(7, 20)) // exact big.Rat -> 7/20
 if err != nil {
-    // handle nil input / ErrNotRepresentable
+    // handle ErrNilBigRat / ErrNotRepresentable
 }
 
 d, err := NewApproxFromFloat64(3.0 / (1 << 64)) // nearest representable Rat on the 1/2^63 grid

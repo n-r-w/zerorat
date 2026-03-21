@@ -9,10 +9,12 @@ import (
 var (
 	// ErrInvalid indicates that a Rat value is in an invalid state.
 	ErrInvalid = errors.New("invalid rat")
+	// ErrNilBigRat indicates that a nil *big.Rat was passed to NewFromBigRat.
+	ErrNilBigRat = errors.New("nil big.Rat")
 	// ErrNonFiniteFloat indicates that a float input is NaN or infinite.
 	ErrNonFiniteFloat = errors.New("non-finite float")
-	// ErrNotRepresentable indicates that a finite float cannot be represented in Rat.
-	ErrNotRepresentable = errors.New("float not representable as rat")
+	// ErrNotRepresentable indicates that an exact input value cannot be represented in Rat.
+	ErrNotRepresentable = errors.New("value not representable as rat")
 )
 
 // RoundType defines rounding strategies for rounding rationals to integers.
