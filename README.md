@@ -26,12 +26,24 @@ go get github.com/n-r-w/zerorat@latest
 ## Basic Usage
 
 ```go
+import "math/big"
+
 // Construction
 a := New(3, 4)        // 3/4
 b := NewFromInt(5)    // 5/1
 c, err := NewFromFloat64(0.125) // exact float -> 1/8
 if err != nil {
     // handle ErrNonFiniteFloat / ErrNotRepresentable
+}
+
+decimal, err := NewFromDecimalString("3.5e-1") // exact decimal/scientific notation -> 7/20
+if err != nil {
+    // handle ErrInvalidDecimalString / ErrNotRepresentable
+}
+
+fromBig, err := NewFromBigRat(big.NewRat(7, 20)) // exact big.Rat -> 7/20
+if err != nil {
+    // handle nil input / ErrNotRepresentable
 }
 
 d, err := NewApproxFromFloat64(3.0 / (1 << 64)) // nearest representable Rat on the 1/2^63 grid
@@ -54,7 +66,17 @@ less := a.Less(b)        // true/false
 
 // Utilities
 str := a.String()        // "23/4"
+decimalStr, err := decimal.ToDecimalString() // "0.35"
+if err != nil {
+    // handle ErrInvalid / ErrNonTerminatingDecimal
+}
+backToBig, err := fromBig.ToBigRatErr() // exact Rat -> *big.Rat
+if err != nil {
+    // handle ErrInvalid
+}
 valid := a.IsValid()     // true/false
+
+_ = backToBig
 ```
 
 ## Money package
@@ -95,7 +117,8 @@ eur := money.NewMoneyInt("EUR", 85)
 err := usd.Add(eur)                           // returns ErrMoneyCurrencyMismatch
 
 // Formatting
-fmt.Println(price.String())                   // "USD 12.99"
+display := money.NewMoneyFromFraction(1299, 100, "USD")
+fmt.Println(display.String())                 // "USD/1299/100"
 ```
 
 ## Validation support
@@ -124,6 +147,8 @@ Benchmarks below were run in this session on **darwin/arm64 (Apple M4 Max)** wit
 - No arbitrary precision support
 - Arithmetic overflow results in invalid state rather than expanding precision
 - Exact float conversion returns `ErrNonFiniteFloat` or `ErrNotRepresentable` instead of changing the value silently
+- `NewFromDecimalString` returns `ErrInvalidDecimalString` for malformed input and `ErrNotRepresentable` when the exact value does not fit in `Rat`
+- `ToDecimalString` returns `ErrNonTerminatingDecimal` for values that do not have a finite decimal form, such as `1/3`
 - Approximate float conversion is opt-in through `NewApproxFromFloat64` / `NewApproxFromFloat32` and rounds to the nearest representable Rat on the `1/2^63` grid
 
 ## Use Cases
