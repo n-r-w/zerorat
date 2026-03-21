@@ -33,7 +33,7 @@ func (r *Rat) UnmarshalJSON(data []byte) error {
 	}
 
 	raw := bytes.TrimSpace(data)
-	if string(raw) == "null" {
+	if bytes.Equal(raw, []byte("null")) {
 		r.Invalidate()
 		return nil
 	}

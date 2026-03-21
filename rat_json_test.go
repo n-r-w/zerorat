@@ -132,6 +132,16 @@ func TestRat_UnmarshalJSON_MalformedQuotedToken(t *testing.T) {
 	assert.True(t, got.IsInvalid(), "failed quoted-token decode should leave Rat invalid")
 }
 
+// TestRat_UnmarshalJSON_NilReceiver verifies that nil Rat receivers fail with the explicit target error.
+func TestRat_UnmarshalJSON_NilReceiver(t *testing.T) {
+	t.Parallel()
+
+	var got *Rat
+
+	err := got.UnmarshalJSON([]byte(`0.35`))
+	require.ErrorIs(t, err, errNilRatJSONTarget)
+}
+
 // TestRat_MarshalJSON verifies that Rat writes normalized JSON numbers and rejects unsupported states.
 func TestRat_MarshalJSON(t *testing.T) {
 	t.Parallel()
