@@ -62,9 +62,11 @@ Use `money.Money` for:
 The package exposes both styles on purpose.
 
 - Mutable methods use pointer receivers and change the receiver in place:
-  - `Add`, `Sub`, `Mul`, `Div`, `Round`, `ScaleUp`, `ScaleDown`, `Invalidate`
+  - `Rat`: `Add`, `Sub`, `Mul`, `Div`, `Round`, `ScaleUp`, `ScaleDown`, `Invalidate`
+  - `Money`: `Add`, `Sub`, `Profit`, `Percent`, `PercentInt`, `PercentMoney`, `MulRat`, `DivRat`, `MulInt`, `DivInt`, `Round`, `ScaleUp`, `ScaleDown`, `Invalidate`
 - Immutable methods use value receivers and return a new value:
-  - `Added`, `Subtracted`, `Multiplied`, `Divided`, `Rounded`, `ScaledUp`, `ScaledDown`
+  - `Rat`: `Added`, `Subtracted`, `Multiplied`, `Divided`, `Rounded`, `ScaledUp`, `ScaledDown`
+  - `Money`: `Added`, `Subtracted`, `Profited`, `Percented`, `PercentedInt`, `PercentedMoney`, `MultipliedRat`, `DividedRat`, `MultipliedInt`, `DividedInt`, `Rounded`, `ScaledUp`, `ScaledDown`
 - Error-returning immutable variants add `Err`.
 
 Prefer mutable methods when the caller clearly wants in-place updates. Prefer immutable methods when chaining or preserving the original value matters.
@@ -81,7 +83,7 @@ Prefer mutable methods when the caller clearly wants in-place updates. Prefer im
 - Use `*Err` variants when the caller must distinguish invalid input from a valid comparison result.
 
 ### `Money`
-- Money-vs-money operations require matching currencies.
+- Money methods that accept another `Money` require matching currencies.
 - Mutable money methods invalidate the receiver on mismatch, overflow, or invalid input.
 - Use `Rat` overloads such as `MulRat`, `DivRat`, `AddRat`, `SubRat` for rate-based math.
 - Use `Percent`, `PercentInt`, `PercentMoney`, and `Profit` helpers when the task is expressed in those terms.
@@ -183,5 +185,5 @@ _ = ratioBig
 - Assuming arithmetic auto-reduces.
 - Using `NewMoneyFloat` for decimal currency semantics.
 - Assuming `Money.String()` is user-facing display formatting.
-- Forgetting that money-to-money operations require matching currencies.
+- Forgetting that money methods taking another `Money` require matching currencies.
 - Ignoring `IsValid()` after operations that may invalidate a value.
