@@ -2,6 +2,7 @@ package zerorat
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 )
 
@@ -52,6 +53,90 @@ func (r Rat) Compare(other Rat) int {
 
 	// Use single 128-bit cross-multiplication for optimal performance
 	return compareRationalsCrossMul(r.numerator, r.denominator, other.numerator, other.denominator)
+}
+
+// EqualInt64 checks equality against an int64 value.
+// Reuses Rat comparison semantics, including false for invalid operands.
+func (r Rat) EqualInt64(other int64) bool {
+	return r.Equal(NewFromInt64(other))
+}
+
+// LessInt64 checks whether this rational value is less than an int64 value.
+// Reuses Rat comparison semantics, including false for invalid operands.
+func (r Rat) LessInt64(other int64) bool {
+	return r.Less(NewFromInt64(other))
+}
+
+// GreaterInt64 checks whether this rational value is greater than an int64 value.
+// Reuses Rat comparison semantics, including false for invalid operands.
+func (r Rat) GreaterInt64(other int64) bool {
+	return r.Greater(NewFromInt64(other))
+}
+
+// CompareInt64 performs three-way comparison against an int64 value.
+// Reuses Rat comparison semantics, including 0 for invalid operands.
+func (r Rat) CompareInt64(other int64) int {
+	return r.Compare(NewFromInt64(other))
+}
+
+// EqualFloat64 checks equality against a float64 value.
+// Non-finite floats cannot be represented as Rat and therefore compare as false.
+func (r Rat) EqualFloat64(other float64) bool {
+	otherRat, err := NewFromFloat64(other)
+	if err != nil {
+		return false
+	}
+
+	return r.Equal(otherRat)
+}
+
+// LessFloat64 checks whether this rational value is less than a float64 value.
+// Non-finite floats cannot be represented as Rat and therefore compare as false.
+func (r Rat) LessFloat64(other float64) bool {
+	otherRat, err := NewFromFloat64(other)
+	if err != nil {
+		return false
+	}
+
+	return r.Less(otherRat)
+}
+
+// GreaterFloat64 checks whether this rational value is greater than a float64 value.
+// Non-finite floats cannot be represented as Rat and therefore compare as false.
+func (r Rat) GreaterFloat64(other float64) bool {
+	otherRat, err := NewFromFloat64(other)
+	if err != nil {
+		return false
+	}
+
+	return r.Greater(otherRat)
+}
+
+// CompareFloat64 performs three-way comparison against a float64 value.
+// Non-finite floats cannot be represented as Rat and therefore compare as 0.
+func (r Rat) CompareFloat64(other float64) int {
+	otherRat, err := NewFromFloat64(other)
+	if err != nil {
+		return 0
+	}
+
+	return r.Compare(otherRat)
+}
+
+// ApproxEqualFloat64 checks whether this rational value is within eps of a float64 value.
+// It compares in float64 space because epsilon semantics belong to float values, not exact rationals.
+// Non-finite floats, invalid Rat values, and negative epsilon return false.
+func (r Rat) ApproxEqualFloat64(other, eps float64) bool {
+	if r.IsInvalid() || math.IsNaN(other) || math.IsInf(other, 0) || math.IsNaN(eps) || math.IsInf(eps, 0) || eps < 0 {
+		return false
+	}
+
+	value, err := r.ToFloat64Err()
+	if err != nil {
+		return false
+	}
+
+	return math.Abs(value-other) <= eps
 }
 
 // String returns string representation of rational number.
