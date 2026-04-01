@@ -82,6 +82,7 @@ Prefer mutable methods when the caller clearly wants in-place updates. Prefer im
   - `CompareFloat64`, `EqualFloat64`, `LessFloat64`, `GreaterFloat64`
 - Use `ApproxEqualFloat64(value, eps)` when you need tolerance-based comparison in `float64` space. Keep using `EqualFloat64` when you need exact `float64` semantics.
 - `float64` comparison methods use the exact IEEE-754 value, just like `NewFromFloat64`. For example, `EqualFloat64(0.5)` can be true, while `EqualFloat64(0.1)` is false for `New(1, 10)`.
+- If a `float64` is finite but still outside the `Rat` model, such as `math.MaxFloat64`, the exact `float64` comparison helpers treat it as an invalid operand and return neutral results (`CompareFloat64` returns `0`; `EqualFloat64`, `LessFloat64`, and `GreaterFloat64` return `false`).
 - Non-`Err` comparisons return neutral values for invalid inputs:
   - `Compare()` returns `0`
   - `Equal`, `Less`, `Greater` return `false`

@@ -204,7 +204,7 @@ func compareRationalsCrossMul(aNum int64, aDenom uint64, cNum int64, cDenom uint
 
 // Pre-computed powers of 10 up to 10^19 (max that fits in uint64)
 // 10^20 = 100000000000000000000 > 2^64-1 = 18446744073709551615.
-var powers = []uint64{ //nolint:gochecknoglobals // pre-computed constants
+var powersOf10 = [...]uint64{ //nolint:gochecknoglobals // pre-computed constants
 	1,                    // 10^0
 	10,                   // 10^1
 	100,                  // 10^2
@@ -237,11 +237,11 @@ func powerOf10(exp int) (uint64, bool) {
 		return 1, false
 	}
 
-	if exp >= len(powers) {
+	if exp >= len(powersOf10) {
 		return 0, true // Overflow
 	}
 
-	return powers[exp], false
+	return powersOf10[exp], false
 }
 
 // willOverflowInt64MulUint64 checks if multiplying int64 by uint64 would overflow int64 range.

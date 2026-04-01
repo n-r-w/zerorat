@@ -197,6 +197,7 @@ func TestRat_CompareFloat64(t *testing.T) {
 		{"fraction greater than float", New(3, 2), 1.25, 1},
 		{"equal exact float", New(1, 2), 0.5, 0},
 		{"exact float semantics for 0.1", New(1, 10), 0.1, -1},
+		{"non-representable finite float", New(1, 2), math.MaxFloat64, 0},
 		{"invalid rat", Rat{}, 0.5, 0},
 		{"non-finite float", New(1, 2), math.Inf(1), 0},
 	}
@@ -219,6 +220,7 @@ func TestRat_EqualFloat64(t *testing.T) {
 		{"equal exact float", New(1, 2), 0.5, true},
 		{"different float", New(1, 2), 0.75, false},
 		{"exact float semantics", New(1, 10), 0.1, false},
+		{"non-representable finite float", New(1, 2), math.MaxFloat64, false},
 		{"invalid rat", Rat{}, 0.5, false},
 		{"non-finite float", New(1, 2), math.NaN(), false},
 	}
@@ -242,6 +244,7 @@ func TestRat_LessFloat64(t *testing.T) {
 		{"greater than float", New(3, 2), 1.25, false},
 		{"equal exact float", New(1, 2), 0.5, false},
 		{"exact float semantics for 0.1", New(1, 10), 0.1, true},
+		{"non-representable finite float", New(1, 2), math.MaxFloat64, false},
 		{"invalid rat", Rat{}, 0.5, false},
 		{"non-finite float", New(1, 2), math.Inf(-1), false},
 	}
@@ -265,6 +268,7 @@ func TestRat_GreaterFloat64(t *testing.T) {
 		{"less than float", New(1, 2), 0.75, false},
 		{"equal exact float", New(1, 2), 0.5, false},
 		{"exact float semantics for 0.1", New(1, 10), 0.1, false},
+		{"non-representable finite float", New(1, 2), math.MaxFloat64, false},
 		{"invalid rat", Rat{}, 0.5, false},
 		{"non-finite float", New(1, 2), math.Inf(1), false},
 	}

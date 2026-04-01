@@ -80,7 +80,7 @@ func (r Rat) CompareInt64(other int64) int {
 }
 
 // EqualFloat64 checks equality against a float64 value.
-// Non-finite floats cannot be represented as Rat and therefore compare as false.
+// Non-finite or non-representable float64 values are treated as invalid operands and compare as false.
 func (r Rat) EqualFloat64(other float64) bool {
 	otherRat, err := NewFromFloat64(other)
 	if err != nil {
@@ -91,7 +91,7 @@ func (r Rat) EqualFloat64(other float64) bool {
 }
 
 // LessFloat64 checks whether this rational value is less than a float64 value.
-// Non-finite floats cannot be represented as Rat and therefore compare as false.
+// Non-finite or non-representable float64 values are treated as invalid operands and compare as false.
 func (r Rat) LessFloat64(other float64) bool {
 	otherRat, err := NewFromFloat64(other)
 	if err != nil {
@@ -102,7 +102,7 @@ func (r Rat) LessFloat64(other float64) bool {
 }
 
 // GreaterFloat64 checks whether this rational value is greater than a float64 value.
-// Non-finite floats cannot be represented as Rat and therefore compare as false.
+// Non-finite or non-representable float64 values are treated as invalid operands and compare as false.
 func (r Rat) GreaterFloat64(other float64) bool {
 	otherRat, err := NewFromFloat64(other)
 	if err != nil {
@@ -113,7 +113,7 @@ func (r Rat) GreaterFloat64(other float64) bool {
 }
 
 // CompareFloat64 performs three-way comparison against a float64 value.
-// Non-finite floats cannot be represented as Rat and therefore compare as 0.
+// Non-finite or non-representable float64 values are treated as invalid operands and compare as 0.
 func (r Rat) CompareFloat64(other float64) int {
 	otherRat, err := NewFromFloat64(other)
 	if err != nil {
