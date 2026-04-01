@@ -202,6 +202,31 @@ func compareRationalsCrossMul(aNum int64, aDenom uint64, cNum int64, cDenom uint
 	return cmpResult
 }
 
+// Pre-computed powers of 10 up to 10^19 (max that fits in uint64)
+// 10^20 = 100000000000000000000 > 2^64-1 = 18446744073709551615.
+var powersOf10 = [...]uint64{ //nolint:gochecknoglobals // pre-computed constants
+	1,                    // 10^0
+	10,                   // 10^1
+	100,                  // 10^2
+	1000,                 // 10^3
+	10000,                // 10^4
+	100000,               // 10^5
+	1000000,              // 10^6
+	10000000,             // 10^7
+	100000000,            // 10^8
+	1000000000,           // 10^9
+	10000000000,          // 10^10
+	100000000000,         // 10^11
+	1000000000000,        // 10^12
+	10000000000000,       // 10^13
+	100000000000000,      // 10^14
+	1000000000000000,     // 10^15
+	10000000000000000,    // 10^16
+	100000000000000000,   // 10^17
+	1000000000000000000,  // 10^18
+	10000000000000000000, // 10^19
+}
+
 // powerOf10 calculates 10^exp as uint64, returning (result, overflow).
 // Returns overflow=true if the result would exceed uint64 capacity.
 func powerOf10(exp int) (uint64, bool) {
@@ -212,36 +237,11 @@ func powerOf10(exp int) (uint64, bool) {
 		return 1, false
 	}
 
-	// Pre-computed powers of 10 up to 10^19 (max that fits in uint64)
-	// 10^20 = 100000000000000000000 > 2^64-1 = 18446744073709551615
-	powers := []uint64{
-		1,                    // 10^0
-		10,                   // 10^1
-		100,                  // 10^2
-		1000,                 // 10^3
-		10000,                // 10^4
-		100000,               // 10^5
-		1000000,              // 10^6
-		10000000,             // 10^7
-		100000000,            // 10^8
-		1000000000,           // 10^9
-		10000000000,          // 10^10
-		100000000000,         // 10^11
-		1000000000000,        // 10^12
-		10000000000000,       // 10^13
-		100000000000000,      // 10^14
-		1000000000000000,     // 10^15
-		10000000000000000,    // 10^16
-		100000000000000000,   // 10^17
-		1000000000000000000,  // 10^18
-		10000000000000000000, // 10^19
-	}
-
-	if exp >= len(powers) {
+	if exp >= len(powersOf10) {
 		return 0, true // Overflow
 	}
 
-	return powers[exp], false
+	return powersOf10[exp], false
 }
 
 // willOverflowInt64MulUint64 checks if multiplying int64 by uint64 would overflow int64 range.

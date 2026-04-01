@@ -77,6 +77,12 @@ Prefer mutable methods when the caller clearly wants in-place updates. Prefer im
 - `New` reduces immediately, but arithmetic methods do not auto-reduce.
 - Call `Reduce()` / `Reduced()` only when lowest terms are actually needed.
 - Overflow or invalid operations usually produce an invalid value instead of widening precision.
+- `Rat` can compare directly with primitive values:
+  - `CompareInt64`, `EqualInt64`, `LessInt64`, `GreaterInt64`
+  - `CompareFloat64`, `EqualFloat64`, `LessFloat64`, `GreaterFloat64`
+- Use `ApproxEqualFloat64(value, eps)` when you need tolerance-based comparison in `float64` space. Keep using `EqualFloat64` when you need exact `float64` semantics.
+- `float64` comparison methods use the exact IEEE-754 value, just like `NewFromFloat64`. For example, `EqualFloat64(0.5)` can be true, while `EqualFloat64(0.1)` is false for `New(1, 10)`.
+- If a `float64` is finite but still outside the `Rat` model, such as `math.MaxFloat64`, the exact `float64` comparison helpers treat it as an invalid operand and return neutral results (`CompareFloat64` returns `0`; `EqualFloat64`, `LessFloat64`, and `GreaterFloat64` return `false`).
 - Non-`Err` comparisons return neutral values for invalid inputs:
   - `Compare()` returns `0`
   - `Equal`, `Less`, `Greater` return `false`

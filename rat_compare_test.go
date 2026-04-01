@@ -101,6 +101,211 @@ func TestRat_Greater(t *testing.T) {
 	}
 }
 
+// TestRat_CompareInt64 tests three-way comparison against int64 values.
+func TestRat_CompareInt64(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		other    int64
+		expected int
+	}{
+		{"fraction less than int", New(3, 2), 2, -1},
+		{"fraction greater than int", New(5, 2), 2, 1},
+		{"equal integer", New(2, 1), 2, 0},
+		{"invalid rat", Rat{}, 2, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.rat.CompareInt64(tt.other))
+		})
+	}
+}
+
+// TestRat_EqualInt64 tests equality comparison against int64 values.
+func TestRat_EqualInt64(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		other    int64
+		expected bool
+	}{
+		{"equal integer", New(7, 1), 7, true},
+		{"fraction not equal to int", New(7, 2), 3, false},
+		{"zero equals zero", New(0, 5), 0, true},
+		{"invalid rat", Rat{}, 1, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.rat.EqualInt64(tt.other))
+		})
+	}
+}
+
+// TestRat_LessInt64 tests less-than comparison against int64 values.
+func TestRat_LessInt64(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		other    int64
+		expected bool
+	}{
+		{"less than int", New(3, 2), 2, true},
+		{"greater than int", New(5, 2), 2, false},
+		{"equal integer", New(2, 1), 2, false},
+		{"invalid rat", Rat{}, 2, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.rat.LessInt64(tt.other))
+		})
+	}
+}
+
+// TestRat_GreaterInt64 tests greater-than comparison against int64 values.
+func TestRat_GreaterInt64(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		other    int64
+		expected bool
+	}{
+		{"greater than int", New(5, 2), 2, true},
+		{"less than int", New(3, 2), 2, false},
+		{"equal integer", New(2, 1), 2, false},
+		{"invalid rat", Rat{}, 2, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.rat.GreaterInt64(tt.other))
+		})
+	}
+}
+
+// TestRat_CompareFloat64 tests three-way comparison against float64 values.
+func TestRat_CompareFloat64(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		other    float64
+		expected int
+	}{
+		{"fraction less than float", New(1, 2), 0.75, -1},
+		{"fraction greater than float", New(3, 2), 1.25, 1},
+		{"equal exact float", New(1, 2), 0.5, 0},
+		{"exact float semantics for 0.1", New(1, 10), 0.1, -1},
+		{"non-representable finite float", New(1, 2), math.MaxFloat64, 0},
+		{"invalid rat", Rat{}, 0.5, 0},
+		{"non-finite float", New(1, 2), math.Inf(1), 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.rat.CompareFloat64(tt.other))
+		})
+	}
+}
+
+// TestRat_EqualFloat64 tests equality comparison against float64 values.
+func TestRat_EqualFloat64(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		other    float64
+		expected bool
+	}{
+		{"equal exact float", New(1, 2), 0.5, true},
+		{"different float", New(1, 2), 0.75, false},
+		{"exact float semantics", New(1, 10), 0.1, false},
+		{"non-representable finite float", New(1, 2), math.MaxFloat64, false},
+		{"invalid rat", Rat{}, 0.5, false},
+		{"non-finite float", New(1, 2), math.NaN(), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.rat.EqualFloat64(tt.other))
+		})
+	}
+}
+
+// TestRat_LessFloat64 tests less-than comparison against float64 values.
+func TestRat_LessFloat64(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		other    float64
+		expected bool
+	}{
+		{"less than float", New(1, 2), 0.75, true},
+		{"greater than float", New(3, 2), 1.25, false},
+		{"equal exact float", New(1, 2), 0.5, false},
+		{"exact float semantics for 0.1", New(1, 10), 0.1, true},
+		{"non-representable finite float", New(1, 2), math.MaxFloat64, false},
+		{"invalid rat", Rat{}, 0.5, false},
+		{"non-finite float", New(1, 2), math.Inf(-1), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.rat.LessFloat64(tt.other))
+		})
+	}
+}
+
+// TestRat_GreaterFloat64 tests greater-than comparison against float64 values.
+func TestRat_GreaterFloat64(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		other    float64
+		expected bool
+	}{
+		{"greater than float", New(3, 2), 1.25, true},
+		{"less than float", New(1, 2), 0.75, false},
+		{"equal exact float", New(1, 2), 0.5, false},
+		{"exact float semantics for 0.1", New(1, 10), 0.1, false},
+		{"non-representable finite float", New(1, 2), math.MaxFloat64, false},
+		{"invalid rat", Rat{}, 0.5, false},
+		{"non-finite float", New(1, 2), math.Inf(1), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.rat.GreaterFloat64(tt.other))
+		})
+	}
+}
+
+// TestRat_ApproxEqualFloat64 tests approximate equality against float64 values.
+func TestRat_ApproxEqualFloat64(t *testing.T) {
+	tests := []struct {
+		name     string
+		rat      Rat
+		other    float64
+		eps      float64
+		expected bool
+	}{
+		{"exact match with zero epsilon", New(1, 2), 0.5, 0, true},
+		{"decimal float within tolerance", New(1, 10), 0.1, 1e-15, true},
+		{"same float64 representation with tiny tolerance", New(1, 10), 0.1, 1e-20, true},
+		{"different values outside tolerance", New(1, 2), 0.75, 0.1, false},
+		{"invalid rat", Rat{}, 0.5, 0.01, false},
+		{"negative epsilon", New(1, 2), 0.5, -0.01, false},
+		{"non-finite float", New(1, 2), math.Inf(1), 0.01, false},
+		{"non-finite epsilon", New(1, 2), 0.5, math.NaN(), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.rat.ApproxEqualFloat64(tt.other, tt.eps))
+		})
+	}
+}
+
 // TestCompareRationalsCrossMul_SignHandling tests cross multiplication with different sign combinations
 func TestCompareRationalsCrossMul_SignHandling(t *testing.T) {
 	tests := []struct {
