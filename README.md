@@ -12,6 +12,9 @@ Zero-allocation rational number library for Go, providing big.Rat-like functiona
 - **Zero heap allocations** for arithmetic and comparison operations
 - **16-byte struct** with perfect memory alignment
 - **Mutable and immutable APIs** for flexible usage
+- **Exact percent-to-factor helper** for $1 + p / 100$ combinations
+- **Explicit-rate Money conversion** without manual unwrap/multiply/re-wrap boilerplate
+- **Cumulative rounding redistribution** that keeps per-item order and rounded totals aligned
 - **Overflow-safe comparisons** using 128-bit arithmetic via math/bits package
 - **Overflow detection** with graceful invalid state handling
 - **Optional fraction reduction** using greatest common divisor algorithm (call Reduce() when needed)
@@ -51,6 +54,9 @@ if err != nil {
     // handle ErrNonFiniteFloat / ErrNotRepresentable
 }
 
+factor := FactorFromPercent(NewFromInt64(20)) // 6/5, which means “increase by 20%”
+gross := NewFromInt64(100).Multiplied(factor) // 120/1
+
 // Mutable operations (results not auto-reduced)
 a.Add(b)                 // a = 3/4 + 5/1 = (3*1 + 5*4)/(4*1) = 23/4
 a.Add(c)                 // explicit conversion first, then exact arithmetic
@@ -77,7 +83,10 @@ if err != nil {
 valid := a.IsValid()     // true/false
 
 _ = backToBig
+_ = gross
 ```
+
+`FactorFromPercent` creates a multiplicative factor. Use it when you need $1 + p / 100$. Keep using `Money.Percent` and `Money.Percented` when you need the percentage value of an amount.
 
 ## JSON support
 
@@ -127,7 +136,7 @@ import (
 price := money.NewMoneyInt("USD", 1299)        // $12.99 (in cents)
 tax, err := money.NewMoneyFloat("USD", 0.85) // exact float input
 discount := money.NewMoney("USD", zerorat.New(15, 100)) // 15% as fraction
-discount1 := money.NewMoneyFromFraction("USD", 20, 100) // 20% as fraction
+discount1 := money.NewMoneyFromFraction(20, 100, "USD") // 20% as fraction
 
 if err != nil {
     // handle ErrNonFiniteFloat / ErrNotRepresentable
@@ -145,6 +154,18 @@ total := price.Added(tax)                      // returns new Money, price uncha
 discountRate, err := zerorat.NewFromFloat64(0.85)
 afterDiscount := total.MultipliedRat(discountRate)  // 15% discount
 
+// Exact conversion by a caller-provided ratio
+converted, err := total.ConvertedErr("EUR", zerorat.New(9, 10))
+if err != nil {
+    // handle ErrMoneyInvalid
+}
+
+// Cumulative redistribution after rounding
+roundedLineItems := money.RedistributeRounded([]money.Money{
+    money.NewMoneyFromFraction(104, 10, "EUR"),
+    money.NewMoneyFromFraction(104, 10, "EUR"),
+}, zerorat.RoundHalfUp, 0) // [10 EUR, 11 EUR]
+
 // Currency validation
 usd := money.NewMoneyInt("USD", 100)
 eur := money.NewMoneyInt("EUR", 85)
@@ -153,7 +174,18 @@ err := usd.Add(eur)                           // returns ErrMoneyCurrencyMismatc
 // Formatting
 display := money.NewMoneyFromFraction(1299, 100, "USD")
 fmt.Println(display.String())                 // "USD/1299/100"
+
+_ = converted
+_ = roundedLineItems
 ```
+
+These helpers stay math-centric:
+
+- `Convert` applies a ratio that the caller already knows.
+- `Convert` does not discover FX pairs, hub currencies, or pricing-specific FX modes.
+- `RedistributeRounded` rounds cumulative totals in input order and returns the per-item deltas.
+- `RedistributeRounded` uses the same `scale` semantics as `Money.Round`: `0` = integers, positive = decimal places, negative = powers of ten.
+- `RedistributeRounded` does not encode VAT rules, pricing orchestration, or DTO shaping.
 
 ## Validation support
 

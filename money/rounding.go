@@ -43,6 +43,62 @@ func (m Money) Rounded(roundType zerorat.RoundType, scale int) Money {
 	return result
 }
 
+// RedistributeRoundedErr rounds cumulative totals and emits per-item deltas in input order.
+// Scale uses the same semantics as Money.Round: 0 rounds to integers, positive values round
+// to decimal places, and negative values round to powers of ten.
+// The returned values preserve order and sum to the rounded total.
+func RedistributeRoundedErr(values []Money, roundType zerorat.RoundType, scale int) ([]Money, error) {
+	if values == nil {
+		return nil, nil
+	}
+
+	if len(values) == 0 {
+		return values[:0], nil
+	}
+
+	sameCurrency, err := SameCurrenciesErr(values...)
+	if err != nil {
+		return nil, err
+	}
+	if !sameCurrency {
+		return nil, ErrMoneyCurrencyMismatch
+	}
+
+	currency := values[0].Currency()
+	runningTotal := ZeroMoney(currency)
+	previousRoundedTotal := ZeroMoney(currency)
+	result := make([]Money, 0, len(values))
+
+	for _, value := range values {
+		if addErr := runningTotal.Add(value); addErr != nil {
+			return nil, addErr
+		}
+
+		roundedTotal, roundErr := runningTotal.RoundedErr(roundType, scale)
+		if roundErr != nil {
+			return nil, roundErr
+		}
+
+		delta, deltaErr := roundedTotal.SubtractedErr(previousRoundedTotal)
+		if deltaErr != nil {
+			return nil, deltaErr
+		}
+
+		result = append(result, delta)
+		previousRoundedTotal = roundedTotal
+	}
+
+	return result, nil
+}
+
+// RedistributeRounded rounds cumulative totals and emits per-item deltas in input order.
+// Scale uses the same semantics as Money.Round.
+// It returns nil on error.
+func RedistributeRounded(values []Money, roundType zerorat.RoundType, scale int) []Money {
+	result, _ := RedistributeRoundedErr(values, roundType, scale)
+	return result
+}
+
 // Ceil rounds the Money toward positive infinity to the specified scale (mutable operation).
 // Mathematical ceiling function: always rounds up for positive numbers, truncates for negative numbers.
 // Uses pointer receiver for mutable operation.

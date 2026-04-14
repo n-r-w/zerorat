@@ -256,6 +256,97 @@ func TestOne(t *testing.T) {
 	assert.Equal(t, uint64(1), r.denominator, "denominator should be 1")
 }
 
+// TestFactorFromPercent tests exact multiplicative-factor construction from percentages.
+func TestFactorFromPercent(t *testing.T) {
+	t.Run("valid inputs", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			percent Rat
+			want    Rat
+		}{
+			{
+				name:    "zero percent",
+				percent: Zero(),
+				want:    One(),
+			},
+			{
+				name:    "positive integer percent",
+				percent: NewFromInt64(20),
+				want:    New(6, 5),
+			},
+			{
+				name:    "negative integer percent",
+				percent: NewFromInt64(-20),
+				want:    New(4, 5),
+			},
+			{
+				name:    "fractional percent",
+				percent: New(25, 2),
+				want:    New(9, 8),
+			},
+			{
+				name:    "minus one hundred percent",
+				percent: NewFromInt64(-100),
+				want:    Zero(),
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				percentBefore := tt.percent
+
+				factor := FactorFromPercent(tt.percent)
+
+				assert.Equal(t, tt.want.Numerator(), factor.Numerator())
+				assert.Equal(t, tt.want.Denominator(), factor.Denominator())
+				assert.True(t, factor.Equal(tt.want))
+				assert.Equal(t, percentBefore, tt.percent)
+			})
+		}
+	})
+
+	t.Run("invalid input returns invalid factor", func(t *testing.T) {
+		factor := FactorFromPercent(Rat{})
+
+		assert.True(t, factor.IsInvalid())
+	})
+
+	t.Run("unreduced equivalent input returns canonical factor", func(t *testing.T) {
+		reduced := New(25, 2)
+		unreduced := New(5, 4)
+		unreduced.Mul(NewFromInt64(10))
+		unreducedBefore := unreduced
+
+		require.True(t, unreduced.IsValid())
+		assert.NotEqual(t, reduced, unreduced)
+
+		reducedFactor := FactorFromPercent(reduced)
+		unreducedFactor := FactorFromPercent(unreduced)
+
+		assert.Equal(t, int64(9), reducedFactor.Numerator())
+		assert.Equal(t, uint64(8), reducedFactor.Denominator())
+		assert.Equal(t, int64(9), unreducedFactor.Numerator())
+		assert.Equal(t, uint64(8), unreducedFactor.Denominator())
+		assert.True(t, reducedFactor.Equal(New(9, 8)))
+		assert.True(t, unreducedFactor.Equal(New(9, 8)))
+		assert.Equal(t, unreducedBefore, unreduced)
+	})
+
+	t.Run("signed addition overflow returns invalid factor", func(t *testing.T) {
+		factor := FactorFromPercent(NewFromInt64(math.MaxInt64))
+
+		assert.True(t, factor.IsInvalid())
+	})
+
+	t.Run("denominator multiplication overflow returns invalid factor", func(t *testing.T) {
+		largeDenominator := ^uint64(0)/100 + 1
+
+		factor := FactorFromPercent(New(1, largeDenominator))
+
+		assert.True(t, factor.IsInvalid())
+	})
+}
+
 // TestRat_FieldAccess tests struct field access
 func TestRat_FieldAccess(t *testing.T) {
 	r := New(3, 4)

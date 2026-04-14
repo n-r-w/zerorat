@@ -43,6 +43,7 @@ Use `money.Money` for:
 - Use `zerorat.Zero()` for valid zero and `zerorat.One()` for valid one.
 - Use `zerorat.New(numerator, denominator)` for exact fractions.
 - Use `zerorat.NewFromInt64` / `zerorat.NewFromInt` for whole numbers.
+- Use `zerorat.FactorFromPercent(percent)` when the caller already has a percentage and needs the exact multiplicative factor $1 + p / 100$. Example: `20 -> 6/5`.
 - Use `zerorat.NewFromDecimalString` when the input is an exact decimal literal or scientific notation string such as `"0.35"` or `"3.5e-1"`.
 - Use `zerorat.NewFromBigRat` when the caller already has a `*big.Rat` and wants an exact `Rat` if it fits the package limits.
 - Use `zerorat.NewFromFloat64` / `zerorat.NewFromFloat32` when you need the exact IEEE-754 value.
@@ -63,11 +64,12 @@ The package exposes both styles on purpose.
 
 - Mutable methods use pointer receivers and change the receiver in place:
   - `Rat`: `Add`, `Sub`, `Mul`, `Div`, `Round`, `ScaleUp`, `ScaleDown`, `Invalidate`
-  - `Money`: `Add`, `Sub`, `Profit`, `Percent`, `PercentInt`, `PercentMoney`, `MulRat`, `DivRat`, `MulInt`, `DivInt`, `Round`, `ScaleUp`, `ScaleDown`, `Invalidate`
+  - `Money`: `Add`, `Sub`, `Profit`, `Percent`, `PercentInt`, `PercentMoney`, `MulRat`, `DivRat`, `Convert`, `MulInt`, `DivInt`, `Round`, `ScaleUp`, `ScaleDown`, `Invalidate`
 - Immutable methods use value receivers and return a new value:
   - `Rat`: `Added`, `Subtracted`, `Multiplied`, `Divided`, `Rounded`, `ScaledUp`, `ScaledDown`
-  - `Money`: `Added`, `Subtracted`, `Profited`, `Percented`, `PercentedInt`, `PercentedMoney`, `MultipliedRat`, `DividedRat`, `MultipliedInt`, `DividedInt`, `Rounded`, `ScaledUp`, `ScaledDown`
+  - `Money`: `Added`, `Subtracted`, `Profited`, `Percented`, `PercentedInt`, `PercentedMoney`, `MultipliedRat`, `DividedRat`, `Converted`, `MultipliedInt`, `DividedInt`, `Rounded`, `ScaledUp`, `ScaledDown`
 - Error-returning immutable variants add `Err`.
+- Package-level multi-value helpers complement methods when the operation works on many values at once, such as `SumErr` / `Sum` and `RedistributeRoundedErr` / `RedistributeRounded`.
 
 Prefer mutable methods when the caller clearly wants in-place updates. Prefer immutable methods when chaining or preserving the original value matters.
 
@@ -92,7 +94,12 @@ Prefer mutable methods when the caller clearly wants in-place updates. Prefer im
 - Money methods that accept another `Money` require matching currencies.
 - Mutable money methods invalidate the receiver on mismatch, overflow, or invalid input.
 - Use `Rat` overloads such as `MulRat`, `DivRat`, `AddRat`, `SubRat` for rate-based math.
+- Use `Convert` / `ConvertedErr` / `Converted` when the caller already has an exact ratio and needs a target-currency `Money` value without manual unwrap-and-rewrap code.
+- `Convert` is not an FX-policy engine. It applies only the explicit ratio passed by the caller.
+- If `Convert` receives the same source and target currency, it returns the original amount unchanged.
 - Use `Percent`, `PercentInt`, `PercentMoney`, and `Profit` helpers when the task is expressed in those terms.
+- Use `RedistributeRoundedErr` / `RedistributeRounded` when rounded line items must preserve input order and still sum to the rounded total.
+- `RedistributeRoundedErr` requires same-currency valid inputs. Uses the same `scale` semantics as `Money.Round`: `0` rounds to integers, positive values round to decimal places, and negative values round to powers of ten. Order-sensitive because it rounds cumulative totals in input order.
 
 ## Formatting and parsing
 
@@ -130,6 +137,9 @@ When helping a user:
 3. If the input is a decimal literal and exact decimal semantics matter, prefer integer units or `NewMoneyFromFraction` over `NewMoneyFloat`.
 4. If the caller may receive invalid input or currency mismatches, prefer `*Err` variants.
 5. If the code starts from a zero value, replace it with `zerorat.Zero()` or `money.ZeroMoney(currency)` as appropriate.
+6. If the caller needs the factor $1 + p / 100$, use `zerorat.FactorFromPercent` instead of reimplementing percent-to-factor math at the call site.
+7. If the caller already has the exact conversion ratio, use `Money.Convert` or `Money.ConvertedErr` instead of extracting `Amount()` and rebuilding `Money` manually.
+8. If rounded line items must add up to the rounded total, use `money.RedistributeRoundedErr` or `money.RedistributeRounded`.
 
 ## Example patterns
 
@@ -138,6 +148,9 @@ import "math/big"
 
 // Exact ratio.
 discountRate := zerorat.New(15, 100)
+
+// Exact percent-to-factor helper.
+vatFactor := zerorat.FactorFromPercent(zerorat.NewFromInt64(20))
 
 // Exact decimal input.
 taxRate, err := zerorat.NewFromDecimalString("7.5e-2")
@@ -156,6 +169,21 @@ price := money.NewMoneyFromFraction(1299, 100, "USD")
 
 // Immutable money-plus-rate operation.
 discountValue := price.MultipliedRat(discountRate)
+
+// Exact conversion when the ratio is already known.
+convertedPrice, err := price.ConvertedErr("EUR", zerorat.New(9, 10))
+if err != nil {
+  return err
+}
+
+// Cumulative redistribution after rounding.
+roundedLineItems, err := money.RedistributeRoundedErr([]money.Money{
+  money.NewMoneyFromFraction(104, 10, "EUR"),
+  money.NewMoneyFromFraction(104, 10, "EUR"),
+}, zerorat.RoundHalfUp, 0)
+if err != nil {
+  return err
+}
 
 // Validation-aware construction from floats.
 rate, err := zerorat.NewFromFloat64(0.125)
@@ -180,16 +208,23 @@ if err != nil {
   return err
 }
 
+_ = vatFactor
+_ = convertedPrice
+_ = roundedLineItems
 _ = ratioBig
 ```
 
 ## Common pitfalls
 
 - Treating `Rat{}` or `Money{}` as valid zero.
+- Confusing a factor like `6/5` with a percentage result like `20/100`.
 - Assuming every `Rat` can be formatted as a finite decimal string.
 - Assuming every `*big.Rat` can be converted into `Rat` without checking package limits.
 - Assuming arithmetic auto-reduces.
 - Using `NewMoneyFloat` for decimal currency semantics.
 - Assuming `Money.String()` is user-facing display formatting.
 - Forgetting that money methods taking another `Money` require matching currencies.
+- Treating `Convert` as a place to discover or compose FX policy.
+- Expecting same-currency `Convert` to rescale the amount; it keeps the original value unchanged.
+- Forgetting that `RedistributeRoundedErr` is order-sensitive.
 - Ignoring `IsValid()` after operations that may invalidate a value.

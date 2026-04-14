@@ -94,6 +94,26 @@ func uint64ToInt64WithSign(u uint64, neg bool) (int64, bool) {
 	return int64(u), true
 }
 
+// addInt64AndUint64ToInt64 adds a signed int64 value and a positive uint64 value.
+// It returns ok=false if the exact result cannot be represented as int64.
+func addInt64AndUint64ToInt64(signed int64, positive uint64) (int64, bool) {
+	if signed >= 0 {
+		positiveInt, ok := uint64ToInt64WithSign(positive, false)
+		if !ok || willOverflowInt64Add(signed, positiveInt) {
+			return 0, false
+		}
+
+		return signed + positiveInt, true
+	}
+
+	negativeMagnitude := absInt64ToUint64(signed)
+	if positive >= negativeMagnitude {
+		return uint64ToInt64WithSign(positive-negativeMagnitude, false)
+	}
+
+	return uint64ToInt64WithSign(negativeMagnitude-positive, true)
+}
+
 // willOverflowInt64Add checks if adding two int64 values would overflow.
 // Uses simple range checking for clarity and correctness.
 func willOverflowInt64Add(a, b int64) bool {

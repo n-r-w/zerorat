@@ -236,6 +236,39 @@ func One() Rat {
 	return Rat{numerator: 1, denominator: 1}
 }
 
+// FactorFromPercent builds the exact multiplicative factor 1 + percent/100.
+// It returns an invalid Rat if the input is invalid or the exact result is not representable.
+func FactorFromPercent(percent Rat) Rat {
+	const percentDivisor uint64 = 100
+
+	// Reduce a local copy first so the result depends on the mathematical percentage,
+	// not on whether the caller currently holds a reduced or unreduced representation.
+	factor := percent.Reduced()
+	if factor.IsInvalid() {
+		return factor
+	}
+
+	// After the input is reduced, any common factor in the final result can only
+	// come from the fixed divisor 100, not from the original denominator.
+	commonFactor := gcdUint64(absInt64ToUint64(factor.numerator), percentDivisor)
+	scaledDivisor := percentDivisor / commonFactor
+	// commonFactor is <= 100 and divides the numerator magnitude exactly.
+	//nolint:gosec // commonFactor is bounded and exact by construction.
+	scaledNumerator := factor.numerator / int64(commonFactor)
+
+	if willOverflowUint64Mul(factor.denominator, scaledDivisor) {
+		return Rat{}
+	}
+
+	denominator := factor.denominator * scaledDivisor
+	numerator, ok := addInt64AndUint64ToInt64(scaledNumerator, denominator)
+	if !ok {
+		return Rat{}
+	}
+
+	return Rat{numerator: numerator, denominator: denominator}
+}
+
 // IsValid checks if the rational number is valid.
 // Returns true if denominator > 0.
 func (r Rat) IsValid() bool {

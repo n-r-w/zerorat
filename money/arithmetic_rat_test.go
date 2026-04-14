@@ -1,6 +1,7 @@
 package money
 
 import (
+	"math"
 	"testing"
 
 	"github.com/n-r-w/zerorat"
@@ -576,5 +577,98 @@ func TestMoneyDivRat(t *testing.T) {
 		// 2/3 ÷ 3/4 = 2/3 * 4/3 = 8/9
 		expected := NewMoneyFromFraction(8, 9, "USD")
 		assert.True(t, result.Equal(expected))
+	})
+}
+
+// TestMoneyConvert tests conversion by an explicit exact ratio.
+func TestMoneyConvert(t *testing.T) {
+	t.Run("mutable Convert - success", func(t *testing.T) {
+		m := NewMoneyFromFraction(3, 2, "USD")
+
+		err := m.Convert("EUR", zerorat.New(4, 3))
+
+		require.NoError(t, err)
+		assert.True(t, m.Equal(NewMoneyInt("EUR", 2)))
+	})
+
+	t.Run("mutable Convert - same currency returns original without using rate", func(t *testing.T) {
+		m := NewMoneyFromFraction(3, 2, "USD")
+		before := m
+
+		err := m.Convert("USD", zerorat.New(4, 3))
+
+		require.NoError(t, err)
+		assert.Equal(t, before, m)
+	})
+
+	t.Run("mutable Convert - same currency ignores invalid rate", func(t *testing.T) {
+		m := NewMoneyInt("USD", 100)
+		before := m
+
+		err := m.Convert("USD", zerorat.Rat{})
+
+		require.NoError(t, err)
+		assert.Equal(t, before, m)
+	})
+
+	t.Run("mutable Convert - invalid money", func(t *testing.T) {
+		m := NewMoneyInt("", 100)
+
+		err := m.Convert("EUR", zerorat.One())
+
+		require.ErrorIs(t, err, ErrMoneyInvalid)
+		assert.True(t, m.IsInvalid())
+	})
+
+	t.Run("mutable Convert - invalid target currency", func(t *testing.T) {
+		m := NewMoneyInt("USD", 100)
+
+		err := m.Convert("", zerorat.One())
+
+		require.ErrorIs(t, err, ErrMoneyInvalid)
+		assert.True(t, m.IsInvalid())
+	})
+
+	t.Run("mutable Convert - invalid rate", func(t *testing.T) {
+		m := NewMoneyInt("USD", 100)
+
+		err := m.Convert("EUR", zerorat.Rat{})
+
+		require.ErrorIs(t, err, ErrMoneyInvalid)
+		assert.True(t, m.IsInvalid())
+	})
+
+	t.Run("mutable Convert - overflow", func(t *testing.T) {
+		m := NewMoneyInt("USD", math.MaxInt64)
+
+		err := m.Convert("EUR", zerorat.NewFromInt64(2))
+
+		require.ErrorIs(t, err, ErrMoneyInvalid)
+		assert.True(t, m.IsInvalid())
+	})
+
+	t.Run("immutable ConvertedErr - success keeps original", func(t *testing.T) {
+		m := NewMoneyFromFraction(3, 2, "USD")
+
+		converted, err := m.ConvertedErr("EUR", zerorat.New(4, 3))
+
+		require.NoError(t, err)
+		assert.True(t, converted.Equal(NewMoneyInt("EUR", 2)))
+		assert.True(t, m.Equal(NewMoneyFromFraction(3, 2, "USD")))
+	})
+
+	t.Run("immutable ConvertedErr - same currency returns original", func(t *testing.T) {
+		m := NewMoneyInt("USD", 100)
+
+		converted, err := m.ConvertedErr("USD", zerorat.Rat{})
+
+		require.NoError(t, err)
+		assert.Equal(t, m, converted)
+	})
+
+	t.Run("immutable Converted - invalid returns invalid", func(t *testing.T) {
+		converted := NewMoneyInt("USD", 100).Converted("", zerorat.One())
+
+		assert.True(t, converted.IsInvalid())
 	})
 }

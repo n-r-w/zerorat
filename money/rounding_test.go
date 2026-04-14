@@ -1,6 +1,7 @@
 package money
 
 import (
+	"math"
 	"testing"
 
 	"github.com/n-r-w/zerorat"
@@ -350,4 +351,153 @@ func TestMoney_Rounding_ConsistencyWithRat(t *testing.T) {
 				"Money rounding should match Rat rounding for %s", tt.name)
 		})
 	}
+}
+
+// TestRedistributeRounded tests cumulative rounding redistribution helpers.
+func TestRedistributeRounded(t *testing.T) {
+	t.Run("nil input stays nil", func(t *testing.T) {
+		result, err := RedistributeRoundedErr(nil, zerorat.RoundHalfUp, 0)
+
+		require.NoError(t, err)
+		assert.Nil(t, result)
+		assert.Nil(t, RedistributeRounded(nil, zerorat.RoundHalfUp, 0))
+	})
+
+	t.Run("empty slice stays non-nil empty", func(t *testing.T) {
+		values := []Money{}
+
+		result, err := RedistributeRoundedErr(values, zerorat.RoundHalfUp, 0)
+		wrapped := RedistributeRounded(values, zerorat.RoundHalfUp, 0)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Empty(t, result)
+		require.NotNil(t, wrapped)
+		assert.Empty(t, wrapped)
+	})
+
+	t.Run("two 10.4 values redistribute to 10 and 11", func(t *testing.T) {
+		values := []Money{
+			NewMoneyFromFraction(104, 10, "USD"),
+			NewMoneyFromFraction(104, 10, "USD"),
+		}
+
+		result, err := RedistributeRoundedErr(values, zerorat.RoundHalfUp, 0)
+
+		require.NoError(t, err)
+		require.Len(t, result, 2)
+		assert.True(t, result[0].Equal(NewMoneyInt("USD", 10)))
+		assert.True(t, result[1].Equal(NewMoneyInt("USD", 11)))
+	})
+
+	t.Run("single value matches Rounded", func(t *testing.T) {
+		values := []Money{NewMoneyFromFraction(104, 10, "USD")}
+
+		result, err := RedistributeRoundedErr(values, zerorat.RoundHalfUp, 0)
+
+		require.NoError(t, err)
+		require.Len(t, result, 1)
+		assert.True(t, result[0].Equal(values[0].Rounded(zerorat.RoundHalfUp, 0)))
+	})
+
+	t.Run("forwards non-default round type and positive scale", func(t *testing.T) {
+		values := []Money{
+			NewMoneyFromFraction(121, 100, "USD"),
+			NewMoneyFromFraction(121, 100, "USD"),
+		}
+
+		result, err := RedistributeRoundedErr(values, zerorat.RoundUp, 1)
+
+		require.NoError(t, err)
+		require.Len(t, result, 2)
+		assert.True(t, result[0].Equal(NewMoneyFromFraction(13, 10, "USD")))
+		assert.True(t, result[1].Equal(NewMoneyFromFraction(12, 10, "USD")))
+
+		total, err := SumErr(values...)
+		require.NoError(t, err)
+		redistributedTotal, err := SumErr(result...)
+		require.NoError(t, err)
+		assert.True(t, redistributedTotal.Equal(total.Rounded(zerorat.RoundUp, 1)))
+	})
+
+	t.Run("forwards negative scale", func(t *testing.T) {
+		values := []Money{
+			NewMoneyInt("USD", 14),
+			NewMoneyInt("USD", 14),
+		}
+
+		result, err := RedistributeRoundedErr(values, zerorat.RoundHalfUp, -1)
+
+		require.NoError(t, err)
+		require.Len(t, result, 2)
+		assert.True(t, result[0].Equal(NewMoneyInt("USD", 10)))
+		assert.True(t, result[1].Equal(NewMoneyInt("USD", 20)))
+
+		total, err := SumErr(values...)
+		require.NoError(t, err)
+		redistributedTotal, err := SumErr(result...)
+		require.NoError(t, err)
+		assert.True(t, redistributedTotal.Equal(total.Rounded(zerorat.RoundHalfUp, -1)))
+	})
+
+	t.Run("preserves rounded total and order sensitivity", func(t *testing.T) {
+		values := []Money{
+			NewMoneyFromFraction(26, 10, "USD"),
+			NewMoneyFromFraction(24, 10, "USD"),
+		}
+
+		result, err := RedistributeRoundedErr(values, zerorat.RoundHalfUp, 0)
+		require.NoError(t, err)
+		require.Len(t, result, 2)
+		assert.True(t, result[0].Equal(NewMoneyInt("USD", 3)))
+		assert.True(t, result[1].Equal(NewMoneyInt("USD", 2)))
+
+		total, err := SumErr(values...)
+		require.NoError(t, err)
+		redistributedTotal, err := SumErr(result...)
+		require.NoError(t, err)
+		assert.True(t, redistributedTotal.Equal(total.Rounded(zerorat.RoundHalfUp, 0)))
+
+		reversed, err := RedistributeRoundedErr([]Money{values[1], values[0]}, zerorat.RoundHalfUp, 0)
+		require.NoError(t, err)
+		require.Len(t, reversed, 2)
+		assert.True(t, reversed[0].Equal(NewMoneyInt("USD", 2)))
+		assert.True(t, reversed[1].Equal(NewMoneyInt("USD", 3)))
+	})
+
+	t.Run("mixed currencies return mismatch error", func(t *testing.T) {
+		values := []Money{
+			NewMoneyInt("USD", 1),
+			NewMoneyInt("EUR", 1),
+		}
+
+		result, err := RedistributeRoundedErr(values, zerorat.RoundHalfUp, 0)
+
+		require.ErrorIs(t, err, ErrMoneyCurrencyMismatch)
+		assert.Nil(t, result)
+	})
+
+	t.Run("invalid item returns invalid error", func(t *testing.T) {
+		values := []Money{
+			NewMoneyInt("USD", 1),
+			NewMoneyInt("", 1),
+		}
+
+		result, err := RedistributeRoundedErr(values, zerorat.RoundHalfUp, 0)
+
+		require.ErrorIs(t, err, ErrMoneyInvalid)
+		assert.Nil(t, result)
+	})
+
+	t.Run("running total overflow returns invalid error", func(t *testing.T) {
+		values := []Money{
+			NewMoneyInt("USD", math.MaxInt64),
+			NewMoneyInt("USD", 1),
+		}
+
+		result, err := RedistributeRoundedErr(values, zerorat.RoundHalfUp, 0)
+
+		require.ErrorIs(t, err, ErrMoneyInvalid)
+		assert.Nil(t, result)
+	})
 }

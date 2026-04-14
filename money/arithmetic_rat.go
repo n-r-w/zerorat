@@ -109,6 +109,50 @@ func (m Money) MultipliedRat(value zerorat.Rat) Money {
 	return result
 }
 
+// Convert rewrites this Money into the target currency using an explicit exact ratio.
+// When the target currency already matches, the value is returned unchanged.
+func (m *Money) Convert(targetCurrency Currency, rate zerorat.Rat) error {
+	if m.IsInvalid() {
+		return ErrMoneyInvalid
+	}
+
+	// Same-currency conversion is an intentional no-op.
+	if targetCurrency == m.currency {
+		return nil
+	}
+
+	if targetCurrency == "" {
+		m.Invalidate()
+		return ErrMoneyInvalid
+	}
+
+	if !m.validateRatOperation(rate) {
+		return ErrMoneyInvalid
+	}
+
+	m.amount.Mul(rate)
+	if err := m.finalizeRatOperation(); err != nil {
+		return err
+	}
+
+	m.currency = targetCurrency
+	return nil
+}
+
+// ConvertedErr returns a converted Money value using an explicit exact ratio.
+func (m Money) ConvertedErr(targetCurrency Currency, rate zerorat.Rat) (Money, error) {
+	result := m
+	err := result.Convert(targetCurrency, rate)
+	return result, err
+}
+
+// Converted returns a converted Money value using an explicit exact ratio.
+// It returns invalid Money on error.
+func (m Money) Converted(targetCurrency Currency, rate zerorat.Rat) Money {
+	result, _ := m.ConvertedErr(targetCurrency, rate)
+	return result
+}
+
 // DivRat divides this Money by a zerorat.Rat value (mutable operation).
 // Sets invalid state on invalid operands, division by zero, or arithmetic overflow.
 // Uses pointer receiver for mutable operation.
