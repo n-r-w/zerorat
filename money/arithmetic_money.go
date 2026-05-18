@@ -103,3 +103,15 @@ func (m Money) MultipliedManyRat(values ...zerorat.Rat) Money {
 	result, _ := m.MultipliedManyRatErr(values...)
 	return result
 }
+
+// Reduce reduces a rational number to its lowest terms (mutable operation).
+func (m *Money) Reduce() {
+	m.amount.Reduce()
+}
+
+// Reduced returns a new rational number reduced to its lowest terms (immutable operation).
+func (m Money) Reduced() Money {
+	result := m // create copy
+	result.Reduce()
+	return result
+}
