@@ -7,6 +7,87 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// assertSigned128Equal verifies the sign and magnitude of an internal signed128 value.
+func assertSigned128Equal(t *testing.T, expected signed128, actual signed128) {
+	t.Helper()
+	assert.Equal(t, expected.negative, actual.negative, "sign mismatch")
+	assert.Equal(t, expected.hi, actual.hi, "high word mismatch")
+	assert.Equal(t, expected.lo, actual.lo, "low word mismatch")
+}
+
+// Test_signed128BasicHelpers covers sign normalization and negation invariants.
+func Test_signed128BasicHelpers(t *testing.T) {
+	t.Run("negative zero normalizes to positive zero", func(t *testing.T) {
+		value := signed128{negative: true}.normalize()
+
+		assert.False(t, value.negative, "zero must not keep a negative sign")
+		assert.True(t, value.isZero(), "normalized zero should stay zero")
+	})
+
+	t.Run("negating zero keeps positive zero", func(t *testing.T) {
+		value := negateSigned128(signed128{negative: true})
+
+		assertSigned128Equal(t, signed128{}, value)
+	})
+
+	t.Run("negating non-zero flips sign", func(t *testing.T) {
+		value := negateSigned128(signed128{lo: 7})
+
+		assertSigned128Equal(t, signed128{negative: true, lo: 7}, value)
+	})
+}
+
+// Test_mulInt64ByUint64ToSigned128 verifies exact 128-bit products used by Add and Sub recovery.
+func Test_mulInt64ByUint64ToSigned128(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    int64
+		factor   uint64
+		expected signed128
+	}{
+		{"positive product", 6, 7, signed128{lo: 42}},
+		{"negative product", -6, 7, signed128{negative: true, lo: 42}},
+		{"zero product clears sign", -6, 0, signed128{}},
+		{"MinInt64 product crosses low word", math.MinInt64, 2, signed128{negative: true, hi: 1}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := mulInt64ByUint64ToSigned128(tt.value, tt.factor)
+
+			assertSigned128Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+// Test_addSigned128 verifies signed 128-bit addition across sign and magnitude branches.
+func Test_addSigned128(t *testing.T) {
+	tests := []struct {
+		name     string
+		left     signed128
+		right    signed128
+		expected signed128
+		ok       bool
+	}{
+		{"same sign positive", signed128{lo: 10}, signed128{lo: 5}, signed128{lo: 15}, true},
+		{"same sign negative", signed128{negative: true, lo: 10}, signed128{negative: true, lo: 5}, signed128{negative: true, lo: 15}, true},
+		{"same sign overflow", signed128{hi: math.MaxUint64, lo: math.MaxUint64}, signed128{lo: 1}, signed128{}, false},
+		{"opposite signs equal magnitude", signed128{lo: 10}, signed128{negative: true, lo: 10}, signed128{}, true},
+		{"opposite signs left larger", signed128{lo: 10}, signed128{negative: true, lo: 3}, signed128{lo: 7}, true},
+		{"opposite signs right larger", signed128{lo: 3}, signed128{negative: true, lo: 10}, signed128{negative: true, lo: 7}, true},
+		{"opposite signs with borrow", signed128{hi: 1}, signed128{negative: true, lo: 1}, signed128{lo: math.MaxUint64}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual, ok := addSigned128(tt.left, tt.right)
+
+			assert.Equal(t, tt.ok, ok, "success mismatch")
+			assertSigned128Equal(t, tt.expected, actual)
+		})
+	}
+}
+
 // Test_willOverflowUint64Mul tests overflow detection for uint64 multiplication
 func Test_willOverflowUint64Mul(t *testing.T) {
 	tests := []struct {
@@ -299,6 +380,161 @@ func Test_uint64ToInt64WithSign(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Test_divInt64ByUint64Exact verifies exact signed division without unsafe MinInt64 casts.
+func Test_divInt64ByUint64Exact(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    int64
+		divisor  uint64
+		expected int64
+		ok       bool
+	}{
+		{"positive exact", 42, 7, 6, true},
+		{"negative exact", -42, 7, -6, true},
+		{"MinInt64 exact", math.MinInt64, 2, math.MinInt64 / 2, true},
+		{"not exact", 10, 3, 0, false},
+		{"zero divisor", 10, 0, 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual, ok := divInt64ByUint64Exact(tt.value, tt.divisor)
+
+			assert.Equal(t, tt.ok, ok, "success mismatch")
+			if tt.ok {
+				assert.Equal(t, tt.expected, actual, "quotient mismatch")
+			}
+		})
+	}
+}
+
+// Test_signed128DivisionHelpers verifies modulo, gcd, and int64 conversion for 128-bit values.
+func Test_signed128DivisionHelpers(t *testing.T) {
+	t.Run("modulo handles small divisor", func(t *testing.T) {
+		var actual uint64
+		assert.NotPanics(t, func() {
+			actual = modUint128ByUint64(3, 5, 2)
+		}, "modulo should handle high words larger than the divisor")
+
+		assert.Equal(t, uint64(1), actual, "modulo mismatch")
+	})
+
+	t.Run("modulo handles high word", func(t *testing.T) {
+		actual := modUint128ByUint64(1, 5, 3)
+
+		assert.Equal(t, uint64(0), actual, "modulo mismatch")
+	})
+
+	t.Run("gcd with zero divisor returns zero", func(t *testing.T) {
+		actual := gcdSigned128Uint64(signed128{lo: 5}, 0)
+
+		assert.Equal(t, uint64(0), actual, "gcd mismatch")
+	})
+
+	t.Run("gcd uses 128-bit modulo", func(t *testing.T) {
+		value := signed128{hi: 1, lo: 8}
+		actual := gcdSigned128Uint64(value, 12)
+
+		assert.Equal(t, uint64(12), actual, "gcd mismatch")
+	})
+
+	t.Run("gcd of zero returns divisor", func(t *testing.T) {
+		actual := gcdSigned128Uint64(signed128{}, 12)
+
+		assert.Equal(t, uint64(12), actual, "gcd mismatch")
+	})
+
+	t.Run("division rejects zero divisor", func(t *testing.T) {
+		_, ok := divSigned128ByUint64ToInt64(signed128{lo: 5}, 0)
+
+		assert.False(t, ok, "zero divisor should not fit")
+	})
+
+	t.Run("division returns positive int64", func(t *testing.T) {
+		actual, ok := divSigned128ByUint64ToInt64(signed128{hi: 1, lo: 0}, 4)
+
+		assert.True(t, ok, "division should fit")
+		assert.Equal(t, int64(1<<63/2), actual, "quotient mismatch")
+	})
+
+	t.Run("division returns MinInt64", func(t *testing.T) {
+		actual, ok := divSigned128ByUint64ToInt64(signed128{negative: true, hi: 1, lo: 0}, 2)
+
+		assert.True(t, ok, "division should fit")
+		assert.Equal(t, int64(math.MinInt64), actual, "quotient mismatch")
+	})
+
+	t.Run("division rejects positive quotient above MaxInt64", func(t *testing.T) {
+		_, ok := divSigned128ByUint64ToInt64(signed128{hi: 1, lo: 0}, 2)
+
+		assert.False(t, ok, "positive quotient should not exceed MaxInt64")
+	})
+
+	t.Run("division rejects oversized quotient", func(t *testing.T) {
+		_, ok := divSigned128ByUint64ToInt64(signed128{hi: 2}, 2)
+
+		assert.False(t, ok, "oversized quotient should not fit")
+	})
+
+	t.Run("division rejects remainder", func(t *testing.T) {
+		_, ok := divSigned128ByUint64ToInt64(signed128{lo: 5}, 2)
+
+		assert.False(t, ok, "non-exact quotient should not fit")
+	})
+}
+
+// Test_reduceIfLarge verifies that the size threshold controls gcd work.
+func Test_reduceIfLarge(t *testing.T) {
+	t.Run("small unreduced value stays unchanged", func(t *testing.T) {
+		r := Rat{numerator: 2, denominator: 4}
+		r.reduceIfLarge()
+
+		assert.Equal(t, int64(2), r.numerator, "numerator should stay unchanged")
+		assert.Equal(t, uint64(4), r.denominator, "denominator should stay unchanged")
+	})
+
+	t.Run("large unreduced value is compacted", func(t *testing.T) {
+		r := Rat{numerator: 2, denominator: autoReduceThreshold * 2}
+		r.reduceIfLarge()
+
+		assert.Equal(t, int64(1), r.numerator, "numerator mismatch")
+		assert.Equal(t, autoReduceThreshold, r.denominator, "denominator mismatch")
+	})
+
+	t.Run("invalid value remains invalid", func(t *testing.T) {
+		r := Rat{numerator: 1, denominator: 0}
+		r.reduceIfLarge()
+
+		assert.True(t, r.IsInvalid(), "invalid value should remain invalid")
+		assert.Equal(t, uint64(0), r.denominator, "invalid denominator should stay zero")
+	})
+}
+
+// Test_scaleMagnitude verifies signed scale normalization before decimal scaling.
+func Test_scaleMagnitude(t *testing.T) {
+	t.Run("positive scale", func(t *testing.T) {
+		magnitude, negative, ok := scaleMagnitude(7)
+
+		assert.True(t, ok, "positive scale should be accepted")
+		assert.False(t, negative, "positive scale should not be marked negative")
+		assert.Equal(t, 7, magnitude, "magnitude mismatch")
+	})
+
+	t.Run("negative scale", func(t *testing.T) {
+		magnitude, negative, ok := scaleMagnitude(-7)
+
+		assert.True(t, ok, "negative scale should be accepted")
+		assert.True(t, negative, "negative scale should be marked negative")
+		assert.Equal(t, 7, magnitude, "magnitude mismatch")
+	})
+
+	t.Run("minimum int scale", func(t *testing.T) {
+		_, _, ok := scaleMagnitude(-int(^uint(0)>>1) - 1)
+
+		assert.False(t, ok, "minimum int scale cannot be represented as a positive int")
+	})
 }
 
 // Test_compareRationalsCrossMul tests overflow-safe cross multiplication comparison

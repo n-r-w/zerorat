@@ -95,6 +95,119 @@ func BenchmarkZeroRat_Div(b *testing.B) {
 	}
 }
 
+// BenchmarkZeroRat_ScaleDown benchmarks the small-value ScaleDown fast path.
+func BenchmarkZeroRat_ScaleDown(b *testing.B) {
+	r1 := New(3, 4)
+	for b.Loop() {
+		r := r1
+		r.ScaleDown(2)
+		_ = r
+	}
+}
+
+// BenchmarkZeroRat_ScaleUp benchmarks the small-value ScaleUp fast path.
+func BenchmarkZeroRat_ScaleUp(b *testing.B) {
+	r1 := New(3, 400)
+	for b.Loop() {
+		r := r1
+		r.ScaleUp(2)
+		_ = r
+	}
+}
+
+// BenchmarkZeroRat_MulConditionalReduction benchmarks successful multiplication
+// that crosses the internal reduction threshold without heap allocation.
+func BenchmarkZeroRat_MulConditionalReduction(b *testing.B) {
+	r1 := Rat{numerator: 1 << 31, denominator: 1}
+	r2 := Rat{numerator: 1 << 31, denominator: 1 << 31}
+	b.ReportAllocs()
+	for b.Loop() {
+		r := r1
+		r.Mul(r2)
+		_ = r
+	}
+}
+
+// BenchmarkZeroRat_AddConditionalReduction measures addition that uses denominator factors.
+func BenchmarkZeroRat_AddConditionalReduction(b *testing.B) {
+	r1 := Rat{numerator: 1, denominator: 1 << 63}
+	r2 := Rat{numerator: 1, denominator: 1 << 62}
+	b.ReportAllocs()
+	for b.Loop() {
+		r := r1
+		r.Add(r2)
+		_ = r
+	}
+}
+
+// BenchmarkZeroRat_SubConditionalReduction measures subtraction that uses denominator factors.
+func BenchmarkZeroRat_SubConditionalReduction(b *testing.B) {
+	r1 := Rat{numerator: 1, denominator: 1 << 62}
+	r2 := Rat{numerator: 1, denominator: 1 << 63}
+	b.ReportAllocs()
+	for b.Loop() {
+		r := r1
+		r.Sub(r2)
+		_ = r
+	}
+}
+
+// BenchmarkZeroRat_DivConditionalReduction measures division that cancels reciprocal factors.
+func BenchmarkZeroRat_DivConditionalReduction(b *testing.B) {
+	r1 := Rat{numerator: 1, denominator: math.MaxUint64}
+	r2 := Rat{numerator: 1, denominator: math.MaxUint64}
+	b.ReportAllocs()
+	for b.Loop() {
+		r := r1
+		r.Div(r2)
+		_ = r
+	}
+}
+
+// BenchmarkZeroRat_ScaleDownConditionalReduction measures scale-down cancellation.
+func BenchmarkZeroRat_ScaleDownConditionalReduction(b *testing.B) {
+	r1 := Rat{numerator: 10, denominator: math.MaxUint64}
+	b.ReportAllocs()
+	for b.Loop() {
+		r := r1
+		r.ScaleDown(1)
+		_ = r
+	}
+}
+
+// BenchmarkZeroRat_ScaleUpConditionalReduction measures scale-up cancellation.
+func BenchmarkZeroRat_ScaleUpConditionalReduction(b *testing.B) {
+	r1 := Rat{numerator: 1, denominator: 10}
+	b.ReportAllocs()
+	for b.Loop() {
+		r := r1
+		r.ScaleUp(19)
+		_ = r
+	}
+}
+
+// BenchmarkZeroRat_RoundPositiveScaleRecovery measures rounding after numerator compaction.
+func BenchmarkZeroRat_RoundPositiveScaleRecovery(b *testing.B) {
+	r1 := Rat{numerator: 1_000_000_000_000_000_000, denominator: 20}
+	b.ReportAllocs()
+	for b.Loop() {
+		r := r1
+		r.Round(RoundDown, 1)
+		_ = r
+	}
+}
+
+// BenchmarkZeroRat_RoundNegativeScaleRecovery measures rounding after denominator compaction.
+func BenchmarkZeroRat_RoundNegativeScaleRecovery(b *testing.B) {
+	r1 := Rat{numerator: 2, denominator: 2}
+	b.ReportAllocs()
+	for b.Loop() {
+		r := r1
+		r.Round(RoundDown, -19)
+		_ = r
+	}
+}
+
 // BenchmarkBigRat_Div benchmarks big.Rat division
 func BenchmarkBigRat_Div(b *testing.B) {
 	r1 := big.NewRat(3, 4)

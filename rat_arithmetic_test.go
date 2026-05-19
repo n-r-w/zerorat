@@ -365,6 +365,82 @@ func TestRat_ArithmeticNoAutoReduction(t *testing.T) {
 	})
 }
 
+// TestRat_ArithmeticConditionalReduction verifies that large intermediates are
+// reduced only when compact representation prevents avoidable invalid results.
+func TestRat_ArithmeticConditionalReduction(t *testing.T) {
+	t.Run("Add rescues same denominator overflow", func(t *testing.T) {
+		r := Rat{numerator: math.MaxInt64, denominator: 2}
+		r.Add(Rat{numerator: math.MaxInt64, denominator: 2})
+
+		assert.True(t, r.IsValid(), "reduced sum should fit")
+		assert.Equal(t, int64(math.MaxInt64), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(1), r.denominator, "denominator mismatch")
+	})
+
+	t.Run("Add rescues denominator product overflow", func(t *testing.T) {
+		r := Rat{numerator: 1, denominator: 1 << 63}
+		r.Add(Rat{numerator: 1, denominator: 1 << 62})
+
+		assert.True(t, r.IsValid(), "sum with common denominator factors should fit")
+		assert.Equal(t, int64(3), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(1<<63), r.denominator, "denominator mismatch")
+	})
+
+	t.Run("Add invalidates non-representable 128-bit numerator", func(t *testing.T) {
+		r := Rat{numerator: math.MaxInt64, denominator: 2}
+
+		assert.NotPanics(t, func() {
+			r.Add(Rat{numerator: 1, denominator: 1 << 63})
+		}, "non-representable sum should not panic")
+		assert.True(t, r.IsInvalid(), "non-representable sum should become invalid")
+	})
+
+	t.Run("Sub rescues denominator product overflow to positive result", func(t *testing.T) {
+		r := Rat{numerator: 1, denominator: 1 << 62}
+		r.Sub(Rat{numerator: 1, denominator: 1 << 63})
+
+		assert.True(t, r.IsValid(), "difference should fit")
+		assert.Equal(t, int64(1), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(1<<63), r.denominator, "denominator mismatch")
+	})
+
+	t.Run("Sub rescues denominator product overflow to negative result", func(t *testing.T) {
+		r := Rat{numerator: 1, denominator: 1 << 63}
+		r.Sub(Rat{numerator: 1, denominator: 1 << 62})
+
+		assert.True(t, r.IsValid(), "difference should fit")
+		assert.Equal(t, int64(-1), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(1<<63), r.denominator, "denominator mismatch")
+	})
+
+	t.Run("Mul rescues cross-cancellable overflow", func(t *testing.T) {
+		r := Rat{numerator: 2, denominator: math.MaxUint64}
+		r.Mul(Rat{numerator: math.MaxInt64, denominator: 2})
+
+		assert.True(t, r.IsValid(), "product should fit after cross cancellation")
+		assert.Equal(t, int64(math.MaxInt64), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(math.MaxUint64), r.denominator, "denominator mismatch")
+	})
+
+	t.Run("Div rescues reciprocal overflow", func(t *testing.T) {
+		r := Rat{numerator: 1, denominator: math.MaxUint64}
+		r.Div(Rat{numerator: 1, denominator: math.MaxUint64})
+
+		assert.True(t, r.IsValid(), "division should fit after reciprocal cancellation")
+		assert.Equal(t, int64(1), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(1), r.denominator, "denominator mismatch")
+	})
+
+	t.Run("Mul reduces large successful result", func(t *testing.T) {
+		r := Rat{numerator: 1 << 31, denominator: 1}
+		r.Mul(Rat{numerator: 1 << 31, denominator: 1 << 31})
+
+		assert.True(t, r.IsValid(), "large product should stay valid")
+		assert.Equal(t, int64(1<<31), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(1), r.denominator, "denominator mismatch")
+	})
+}
+
 // TestRat_Div_NegativeDivisor tests division by negative numbers
 func TestRat_Div_NegativeDivisor(t *testing.T) {
 	tests := []struct {
@@ -1282,6 +1358,13 @@ func TestRat_ScaleDown(t *testing.T) {
 		assert.Equal(t, r2.denominator, r1.denominator, "ScaleDown(-2) should equal ScaleUp(2)")
 	})
 
+	t.Run("minimum negative scale invalidates", func(t *testing.T) {
+		r := New(1, 2)
+		r.ScaleDown(-int(^uint(0)>>1) - 1)
+
+		assert.True(t, r.IsInvalid(), "unsupported scale should invalidate")
+	})
+
 	t.Run("invalid state handling", func(t *testing.T) {
 		r := Rat{numerator: 1, denominator: 0} // Invalid
 		r.ScaleDown(2)
@@ -1293,6 +1376,15 @@ func TestRat_ScaleDown(t *testing.T) {
 		r := Rat{numerator: 1, denominator: math.MaxUint64 / 5} // Large denominator
 		r.ScaleDown(10)                                         // This should cause overflow
 		assert.True(t, r.IsInvalid(), "overflow should result in invalid state")
+	})
+
+	t.Run("overflow recovery through scale factor cancellation", func(t *testing.T) {
+		r := Rat{numerator: 10, denominator: math.MaxUint64}
+		r.ScaleDown(1)
+
+		assert.True(t, r.IsValid(), "scale down should fit after reducing by 10")
+		assert.Equal(t, int64(1), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(math.MaxUint64), r.denominator, "denominator mismatch")
 	})
 }
 
@@ -1326,6 +1418,17 @@ func TestRat_ScaledDown(t *testing.T) {
 				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
 			})
 		}
+	})
+
+	t.Run("overflow recovery preserves original", func(t *testing.T) {
+		original := Rat{numerator: 10, denominator: math.MaxUint64}
+		result := original.ScaledDown(1)
+
+		assert.Equal(t, int64(10), original.numerator, "original numerator should be unchanged")
+		assert.Equal(t, uint64(math.MaxUint64), original.denominator, "original denominator should be unchanged")
+		assert.True(t, result.IsValid(), "scale down should fit after reducing by 10")
+		assert.Equal(t, int64(1), result.numerator, "result numerator mismatch")
+		assert.Equal(t, uint64(math.MaxUint64), result.denominator, "result denominator mismatch")
 	})
 }
 
@@ -1377,6 +1480,13 @@ func TestRat_ScaleUp(t *testing.T) {
 		assert.Equal(t, r2.denominator, r1.denominator, "ScaleUp(-2) should equal ScaleDown(2)")
 	})
 
+	t.Run("minimum negative scale invalidates", func(t *testing.T) {
+		r := New(1, 2)
+		r.ScaleUp(-int(^uint(0)>>1) - 1)
+
+		assert.True(t, r.IsInvalid(), "unsupported scale should invalidate")
+	})
+
 	t.Run("invalid state handling", func(t *testing.T) {
 		r := Rat{numerator: 1, denominator: 0} // Invalid
 		r.ScaleUp(2)
@@ -1388,6 +1498,15 @@ func TestRat_ScaleUp(t *testing.T) {
 		r := Rat{numerator: math.MaxInt64 / 5, denominator: 1} // Large numerator
 		r.ScaleUp(10)                                          // This should cause overflow
 		assert.True(t, r.IsInvalid(), "overflow should result in invalid state")
+	})
+
+	t.Run("overflow recovery through scale factor cancellation", func(t *testing.T) {
+		r := Rat{numerator: 1, denominator: 10}
+		r.ScaleUp(19)
+
+		assert.True(t, r.IsValid(), "scale up should fit after reducing by 10")
+		assert.Equal(t, int64(1_000_000_000_000_000_000), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(1), r.denominator, "denominator mismatch")
 	})
 }
 
@@ -1421,5 +1540,16 @@ func TestRat_ScaledUp(t *testing.T) {
 				assert.Equal(t, tt.wantDenom, result.denominator, "result denominator mismatch")
 			})
 		}
+	})
+
+	t.Run("overflow recovery preserves original", func(t *testing.T) {
+		original := Rat{numerator: 1, denominator: 10}
+		result := original.ScaledUp(19)
+
+		assert.Equal(t, int64(1), original.numerator, "original numerator should be unchanged")
+		assert.Equal(t, uint64(10), original.denominator, "original denominator should be unchanged")
+		assert.True(t, result.IsValid(), "scale up should fit after reducing by 10")
+		assert.Equal(t, int64(1_000_000_000_000_000_000), result.numerator, "result numerator mismatch")
+		assert.Equal(t, uint64(1), result.denominator, "result denominator mismatch")
 	})
 }

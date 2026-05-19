@@ -58,6 +58,8 @@ func (r *Rat) Round(roundType RoundType, scale int) {
 		return
 	}
 
+	r.reduceIfLarge()
+
 	// Calculate the scaling factor (10^|scale|)
 	var scaleFactor uint64
 	var scaleFactorOverflow bool
@@ -103,8 +105,17 @@ func (r *Rat) Round(roundType RoundType, scale int) {
 		return
 	}
 
-	// Reduce to lowest terms
+	// Keep rounded small values on the fast path and compact only large results.
+	r.reduceIfLarge()
+}
+
+// reduceForRound reduces the receiver only after a rounding overflow is detected.
+// It reports whether the representation changed enough to justify a retry.
+func (r *Rat) reduceForRound() bool {
+	oldNumerator := r.numerator
+	oldDenominator := r.denominator
 	r.Reduce()
+	return r.numerator != oldNumerator || r.denominator != oldDenominator
 }
 
 // roundToDecimalPlaces handles rounding to a positive number of decimal places.
@@ -145,6 +156,10 @@ func (r *Rat) roundToDecimalPlaces(scaleFactor uint64, roundType RoundType) {
 
 	// Check for overflow in numerator multiplication
 	if willOverflowInt64MulUint64(r.numerator, scaleFactor) {
+		if r.reduceForRound() {
+			r.roundToDecimalPlaces(scaleFactor, roundType)
+			return
+		}
 		r.Invalidate()
 		return
 	}
@@ -178,6 +193,10 @@ func (r *Rat) roundToPowersOfTen(scaleFactor uint64, roundType RoundType) {
 
 	// Check for overflow in denominator multiplication
 	if willOverflowUint64Mul(r.denominator, scaleFactor) {
+		if r.reduceForRound() {
+			r.roundToPowersOfTen(scaleFactor, roundType)
+			return
+		}
 		r.Invalidate()
 		return
 	}
@@ -190,6 +209,10 @@ func (r *Rat) roundToPowersOfTen(scaleFactor uint64, roundType RoundType) {
 
 	// Multiply back by scale factor
 	if willOverflowInt64MulUint64(roundedInt, scaleFactor) {
+		if r.reduceForRound() {
+			r.roundToPowersOfTen(scaleFactor, roundType)
+			return
+		}
 		r.Invalidate()
 		return
 	}
