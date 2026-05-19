@@ -230,7 +230,8 @@ Benchmarks below are for **darwin/arm64 (Apple M4 Max)** with `go test -run '^$'
 
 - Numbers must fit within int64 (numerator) and uint64 (denominator) ranges
 - No arbitrary precision support
-- Arithmetic overflow results in invalid state rather than expanding precision
+- Unrecoverable overflow and exact results outside `Rat` limits produce invalid state rather than expanding precision
+- Recoverable intermediate overflow may be reduced or cancelled
 - Exact float conversion returns `ErrNonFiniteFloat` or `ErrNotRepresentable` instead of changing the value silently
 - `NewFromDecimalString` returns `ErrInvalidDecimalString` for malformed input and `ErrNotRepresentable` when the exact value does not fit in `Rat`
 - `ToDecimalString` returns `ErrNonTerminatingDecimal` for values that do not have a finite decimal form, such as `1/3`

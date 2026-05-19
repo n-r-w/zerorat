@@ -471,6 +471,13 @@ func TestRat_Div_NegativeDivisor(t *testing.T) {
 			wantNum:   9,          // -3/2 ÷ (-2/3) = -3/2 * (-3/2) = 9/4
 			wantDenom: 4,
 		},
+		{
+			name:      "negative divisor produces min int64 numerator",
+			receiver:  New(1, 5),
+			other:     New(-3, uint64(math.MaxInt64)+1),
+			wantNum:   math.MinInt64,
+			wantDenom: 15,
+		},
 	}
 
 	for _, tt := range tests {
@@ -616,7 +623,23 @@ func TestRat_AddSubCommon_EdgeCases(t *testing.T) {
 	})
 }
 
-// TestRat_IntArithmetic tests arithmetic operations with int64 values
+// TestRat_SequentialOperationsKeepRepresentableResults covers a reduced result across operations.
+func TestRat_SequentialOperationsKeepRepresentableResults(t *testing.T) {
+	r := Rat{numerator: 1, denominator: uint64(1) << 62}
+	r.Add(Rat{numerator: 1, denominator: uint64(1) << 63})
+
+	require.True(t, r.IsValid(), "addition should keep representable result valid")
+	assert.Equal(t, int64(3), r.numerator, "addition numerator mismatch")
+	assert.Equal(t, uint64(1)<<63, r.denominator, "addition denominator mismatch")
+
+	r.Mul(Rat{numerator: 1 << 62, denominator: 3})
+
+	require.True(t, r.IsValid(), "multiplication should keep representable result valid")
+	assert.Equal(t, int64(1), r.numerator, "multiplication numerator mismatch")
+	assert.Equal(t, uint64(2), r.denominator, "multiplication denominator mismatch")
+}
+
+// TestRat_IntArithmetic tests arithmetic operations with int64 values.
 func TestRat_IntArithmetic(t *testing.T) {
 	t.Run("AddInt", func(t *testing.T) {
 		tests := []struct {
@@ -1386,6 +1409,15 @@ func TestRat_ScaleDown(t *testing.T) {
 		assert.Equal(t, int64(1), r.numerator, "numerator mismatch")
 		assert.Equal(t, uint64(math.MaxUint64), r.denominator, "denominator mismatch")
 	})
+
+	t.Run("overflowing power of ten fits after cancellation", func(t *testing.T) {
+		r := New(10, 1)
+		r.ScaleDown(20)
+
+		assert.True(t, r.IsValid(), "scale down should fit after cancelling by 10")
+		assert.Equal(t, int64(1), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(10_000_000_000_000_000_000), r.denominator, "denominator mismatch")
+	})
 }
 
 // TestRat_ScaledDown tests the immutable ScaledDown method
@@ -1505,6 +1537,15 @@ func TestRat_ScaleUp(t *testing.T) {
 		r.ScaleUp(19)
 
 		assert.True(t, r.IsValid(), "scale up should fit after reducing by 10")
+		assert.Equal(t, int64(1_000_000_000_000_000_000), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(1), r.denominator, "denominator mismatch")
+	})
+
+	t.Run("overflowing power of ten fits after cancellation", func(t *testing.T) {
+		r := New(1, 100)
+		r.ScaleUp(20)
+
+		assert.True(t, r.IsValid(), "scale up should fit after cancelling by 100")
 		assert.Equal(t, int64(1_000_000_000_000_000_000), r.numerator, "numerator mismatch")
 		assert.Equal(t, uint64(1), r.denominator, "denominator mismatch")
 	})

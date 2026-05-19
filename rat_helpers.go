@@ -242,21 +242,21 @@ func gcdUint64(a, b uint64) uint64 {
 	return a
 }
 
-// scaleMagnitude returns the absolute scale and whether the original scale was negative.
+// scaleMagnitude returns the absolute scale.
 // It rejects the minimum int value because its absolute value cannot be represented as int.
-func scaleMagnitude(scale int) (magnitude int, negative, ok bool) {
+func scaleMagnitude(scale int) (magnitude int, ok bool) {
 	if scale >= 0 {
-		return scale, false, true
+		return scale, true
 	}
 
 	// The minimum int value has no positive counterpart on two's-complement
 	// platforms, so callers must treat it as an unsupported scale.
 	minInt := -int(^uint(0)>>1) - 1
 	if scale == minInt {
-		return 0, true, false
+		return 0, false
 	}
 
-	return -scale, true, true
+	return -scale, true
 }
 
 // appendBitModulo appends one high-to-low binary digit to a running remainder.
@@ -510,8 +510,129 @@ func willOverflowInt64MulUint64(a int64, b uint64) bool {
 	return absA > (uint64(math.MaxInt64)+1)/b
 }
 
+// divSigned128ByUint64 divides a signed 128-bit value by a uint64 divisor.
+// The quotient keeps the input sign, and the remainder is always a magnitude.
+func divSigned128ByUint64(value signed128, divisor uint64) (signed128, uint64, bool) {
+	if divisor == 0 {
+		return signed128{}, 0, false
+	}
+	if value.isZero() {
+		return signed128{}, 0, true
+	}
+
+	quotientHi := value.hi / divisor
+	highRemainder := value.hi % divisor
+	quotientLo, remainder := bits.Div64(highRemainder, value.lo, divisor)
+
+	quotient := signed128{negative: value.negative, hi: quotientHi, lo: quotientLo}.normalize()
+	return quotient, remainder, true
+}
+
+// roundSigned128Division rounds a signed 128-bit numerator divided by a uint64 denominator.
+func roundSigned128Division(numerator signed128, denominator uint64, roundType RoundType) (signed128, bool) {
+	quotient, remainder, ok := divSigned128ByUint64(numerator, denominator)
+	if !ok {
+		return signed128{}, false
+	}
+
+	return applyRoundingToQuotient(quotient, remainder, denominator, numerator.negative, roundType)
+}
+
+// roundInt64ByUint128Denominator rounds an int64 numerator divided by a 128-bit
+// denominator. It is used when negative-scale rounding makes the denominator exceed uint64.
+func roundInt64ByUint128Denominator(
+	numerator int64,
+	denominatorHi, denominatorLo uint64,
+	roundType RoundType,
+) (int64, bool) {
+	if denominatorHi == 0 {
+		if denominatorLo == 0 {
+			return 0, false
+		}
+		return roundDivision(numerator, denominatorLo, roundType), true
+	}
+	if numerator == 0 {
+		return 0, true
+	}
+
+	negative := numerator < 0
+	remainder := absInt64ToUint64(numerator)
+	quotient := int64(0)
+
+	if roundType != RoundDown && roundType != RoundUp && roundType != RoundHalfUp {
+		return quotient, true
+	}
+	if roundType == RoundDown {
+		return quotient, true
+	}
+	if roundType == RoundUp {
+		if negative {
+			return -1, true
+		}
+		return 1, true
+	}
+
+	halfComparison := compareUint64RemainderToHalf128(remainder, denominatorHi, denominatorLo)
+	if halfComparison > 0 {
+		if negative {
+			return -1, true
+		}
+		return 1, true
+	}
+	if halfComparison == 0 && !negative {
+		return 1, true
+	}
+	return quotient, true
+}
+
+// compareUint64RemainderToHalf128 compares a uint64 remainder with half of a
+// 128-bit denominator.
+func compareUint64RemainderToHalf128(remainder, denominatorHi, denominatorLo uint64) int {
+	doubleHi, doubleLo := bits.Mul64(remainder, halfDivisor)
+	return compare128Bit(doubleHi, doubleLo, denominatorHi, denominatorLo)
+}
+
+// applyRoundingToQuotient applies RoundType to a truncated quotient and a uint64
+// remainder.
+func applyRoundingToQuotient(
+	quotient signed128,
+	remainder, denominator uint64,
+	negative bool,
+	roundType RoundType,
+) (signed128, bool) {
+	if remainder == 0 {
+		return quotient, true
+	}
+
+	if roundType != RoundDown && roundType != RoundUp && roundType != RoundHalfUp {
+		return quotient, true
+	}
+
+	if roundType == RoundDown {
+		return quotient, true
+	}
+
+	incrementAwayFromZero := func() (signed128, bool) {
+		one := signed128{negative: negative, lo: 1}
+		return addSigned128(quotient, one)
+	}
+
+	if roundType == RoundUp {
+		return incrementAwayFromZero()
+	}
+
+	halfComparison := compareRemainderToHalf(remainder, denominator)
+	if halfComparison > 0 {
+		return incrementAwayFromZero()
+	}
+	if halfComparison == 0 && !negative {
+		return incrementAwayFromZero()
+	}
+	return quotient, true
+}
+
 // roundDivision performs integer division with rounding according to RoundType.
-// Computes round(numerator / denominator) using the specified rounding strategy.
+// It computes round(numerator / denominator) using the specified rounding strategy.
 func roundDivision(numerator int64, denominator uint64, roundType RoundType) int64 {
 	if denominator == 0 {
 		return 0 // Should not happen, but be safe

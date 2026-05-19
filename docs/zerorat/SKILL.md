@@ -76,9 +76,9 @@ Prefer mutable methods when the caller clearly wants in-place updates. Prefer im
 ## Arithmetic, reduction, and error semantics
 
 ### `Rat`
-- `New` reduces immediately. `Add`, `Sub`, `Mul`, `Div`, `ScaleUp`, `ScaleDown`, and `Round` keep small results on the fast path and reduce large intermediates when that avoids preventable overflow.
+- `New` reduces immediately. `Add`, `Sub`, `Mul`, `Div`, `ScaleUp`, `ScaleDown`, and `Round` keep small results on the fast path and reduce or cancel large intermediates when that avoids preventable overflow.
 - Call `Reduce()` / `Reduced()` when lowest terms are required by the caller, not just for overflow safety.
-- Overflow or invalid operations usually produce an invalid value instead of widening precision.
+- Unrecoverable overflow, exact results outside `Rat` limits, and invalid operations produce an invalid value instead of widening precision.
 - `Rat` can compare directly with primitive values:
   - `CompareInt64`, `EqualInt64`, `LessInt64`, `GreaterInt64`
   - `CompareFloat64`, `EqualFloat64`, `LessFloat64`, `GreaterFloat64`

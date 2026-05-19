@@ -289,8 +289,19 @@ func (r *Rat) Div(other Rat) {
 	// Get absolute value of other.numerator for unsigned arithmetic
 	otherNumAbs := absInt64ToUint64(other.numerator)
 
+	// Apply the divisor sign before multiplying so the MinInt64 magnitude remains
+	// representable when the exact result is negative.
+	signedNumerator := r.numerator
+	if other.numerator < 0 {
+		if signedNumerator == math.MinInt64 {
+			r.divReduced(other)
+			return
+		}
+		signedNumerator = -signedNumerator
+	}
+
 	// Check for numerator * denominator overflow and compute safely
-	prodNum, ok := mulInt64ByUint64ToInt64(r.numerator, other.denominator)
+	prodNum, ok := mulInt64ByUint64ToInt64(signedNumerator, other.denominator)
 	if !ok {
 		r.divReduced(other)
 		return
@@ -304,16 +315,6 @@ func (r *Rat) Div(other Rat) {
 
 	newNum := prodNum
 	newDenom := r.denominator * otherNumAbs
-
-	// Apply sign: if other.numerator was negative, negate result
-	if other.numerator < 0 {
-		if newNum == math.MinInt64 {
-			// cannot negate MinInt64 safely; treat as overflow
-			r.divReduced(other)
-			return
-		}
-		newNum = -newNum
-	}
 
 	// If result is zero, normalize to 0/1
 	if newNum == 0 {
@@ -345,8 +346,8 @@ func (r *Rat) divReduced(other Rat) {
 		return
 	}
 
-	// For a/b ÷ c/d, cancel a with |c| and d with b before multiplying the
-	// remaining terms. The sign of c is applied after the numerator product.
+	// For a/b divided by c/d, cancel a with |c| and d with b before multiplying
+	// the remaining terms.
 	rightNumeratorAbs := absInt64ToUint64(right.numerator)
 	leftWithRightNumerator := gcdInt64Uint64(left.numerator, rightNumeratorAbs)
 	rightDenominatorWithLeftDenominator := gcdUint64(right.denominator, left.denominator)
@@ -362,21 +363,20 @@ func (r *Rat) divReduced(other Rat) {
 	leftDenominator := left.denominator / rightDenominatorWithLeftDenominator
 	rightDenominator := right.denominator / rightDenominatorWithLeftDenominator
 
-	// The numerator product is signed because the dividend numerator carries its
-	// sign. The divisor sign is handled in the next block.
+	// Apply the divisor sign before multiplying so a negative MinInt64 result is
+	// kept when the exact value fits the Rat numerator range.
+	if right.numerator < 0 {
+		if leftNum == math.MinInt64 {
+			r.Invalidate()
+			return
+		}
+		leftNum = -leftNum
+	}
+
 	newNum, ok := mulInt64ByUint64ToInt64(leftNum, rightDenominator)
 	if !ok {
 		r.Invalidate()
 		return
-	}
-	if right.numerator < 0 {
-		// Negating MinInt64 cannot be represented as int64. Treat that as an
-		// unrepresentable exact result instead of wrapping the sign.
-		if newNum == math.MinInt64 {
-			r.Invalidate()
-			return
-		}
-		newNum = -newNum
 	}
 
 	if willOverflowUint64Mul(leftDenominator, rightNumeratorAbs) {
@@ -521,7 +521,8 @@ func (r Rat) Inverted() Rat {
 // ScaleDown scales the rational number down by n decimal places (mutable operation).
 // Equivalent to dividing by 10^n, moving the decimal point left.
 // For negative n, calls ScaleUp with |n|.
-// Sets invalid state on overflow or with invalid operands.
+// Sets invalid state when overflow remains after cancellation, the exact result
+// is outside Rat limits, or operands are invalid.
 func (r *Rat) ScaleDown(n int) {
 	// If already invalid, remain invalid
 	if r.IsInvalid() {
@@ -535,7 +536,7 @@ func (r *Rat) ScaleDown(n int) {
 
 	// Handle negative scale by calling ScaleUp
 	if n < 0 {
-		magnitude, _, ok := scaleMagnitude(n)
+		magnitude, ok := scaleMagnitude(n)
 		if !ok {
 			r.Invalidate()
 			return
@@ -547,7 +548,7 @@ func (r *Rat) ScaleDown(n int) {
 	// Get power of 10
 	powerOf10, overflow := powerOf10(n)
 	if overflow {
-		r.Invalidate()
+		r.scaleDownLarge(n)
 		return
 	}
 
@@ -562,8 +563,48 @@ func (r *Rat) ScaleDown(n int) {
 	r.reduceIfLarge()
 }
 
-// scaleDownReduced retries decimal scaling after reducing the current value and
-// cancelling numerator factors against 10^n before the denominator grows.
+// scaleDownLarge scales down when 10^n does not fit uint64 by processing decimal
+// chunks. It cancels numerator factors before growing the denominator.
+func (r *Rat) scaleDownLarge(n int) {
+	value := *r
+	value.Reduce()
+	if value.numerator == 0 {
+		r.numerator = 0
+		r.denominator = 1
+		return
+	}
+
+	remaining := n
+	for remaining > 0 {
+		chunk := remaining
+		if chunk >= len(powersOf10) {
+			chunk = len(powersOf10) - 1
+		}
+
+		scaleFactor := powersOf10[chunk]
+		commonFactor := gcdInt64Uint64(value.numerator, scaleFactor)
+
+		var ok bool
+		value.numerator, ok = divInt64ByUint64Exact(value.numerator, commonFactor)
+		if !ok {
+			r.Invalidate()
+			return
+		}
+		scaleFactor /= commonFactor
+
+		if willOverflowUint64Mul(value.denominator, scaleFactor) {
+			r.Invalidate()
+			return
+		}
+		value.denominator *= scaleFactor
+		remaining -= chunk
+	}
+
+	r.numerator = value.numerator
+	r.denominator = value.denominator
+	r.reduceIfLarge()
+}
+
 func (r *Rat) scaleDownReduced(scaleFactor uint64) {
 	// Reduce first so existing common factors do not multiply into the denominator.
 	value := *r
@@ -602,7 +643,8 @@ func (r Rat) ScaledDown(n int) Rat {
 // ScaleUp scales the rational number up by n decimal places (mutable operation).
 // Equivalent to multiplying by 10^n, moving the decimal point right.
 // For negative n, calls ScaleDown with |n|.
-// Sets invalid state on overflow or with invalid operands.
+// Sets invalid state when overflow remains after cancellation, the exact result
+// is outside Rat limits, or operands are invalid.
 func (r *Rat) ScaleUp(n int) {
 	// If already invalid, remain invalid
 	if r.IsInvalid() {
@@ -616,7 +658,7 @@ func (r *Rat) ScaleUp(n int) {
 
 	// Handle negative scale by calling ScaleDown
 	if n < 0 {
-		magnitude, _, ok := scaleMagnitude(n)
+		magnitude, ok := scaleMagnitude(n)
 		if !ok {
 			r.Invalidate()
 			return
@@ -628,7 +670,7 @@ func (r *Rat) ScaleUp(n int) {
 	// Get power of 10
 	powerOf10, overflow := powerOf10(n)
 	if overflow {
-		r.Invalidate()
+		r.scaleUpLarge(n)
 		return
 	}
 
@@ -650,8 +692,43 @@ func (r *Rat) ScaleUp(n int) {
 	r.reduceIfLarge()
 }
 
-// scaleUpReduced retries decimal scaling after reducing the current value and
-// cancelling denominator factors against 10^n before the numerator grows.
+// scaleUpLarge scales up when 10^n does not fit uint64 by processing decimal
+// chunks. It cancels denominator factors before growing the numerator.
+func (r *Rat) scaleUpLarge(n int) {
+	value := *r
+	value.Reduce()
+	if value.numerator == 0 {
+		r.numerator = 0
+		r.denominator = 1
+		return
+	}
+
+	remaining := n
+	for remaining > 0 {
+		chunk := remaining
+		if chunk >= len(powersOf10) {
+			chunk = len(powersOf10) - 1
+		}
+
+		scaleFactor := powersOf10[chunk]
+		commonFactor := gcdUint64(value.denominator, scaleFactor)
+		value.denominator /= commonFactor
+		scaleFactor /= commonFactor
+
+		newNum, ok := mulInt64ByUint64ToInt64(value.numerator, scaleFactor)
+		if !ok {
+			r.Invalidate()
+			return
+		}
+		value.numerator = newNum
+		remaining -= chunk
+	}
+
+	r.numerator = value.numerator
+	r.denominator = value.denominator
+	r.reduceIfLarge()
+}
+
 func (r *Rat) scaleUpReduced(scaleFactor uint64) {
 	// Reduce first so denominator factors that already match the numerator do not
 	// hide cancellation against 10^n.

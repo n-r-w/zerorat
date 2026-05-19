@@ -515,23 +515,21 @@ func Test_reduceIfLarge(t *testing.T) {
 // Test_scaleMagnitude verifies signed scale normalization before decimal scaling.
 func Test_scaleMagnitude(t *testing.T) {
 	t.Run("positive scale", func(t *testing.T) {
-		magnitude, negative, ok := scaleMagnitude(7)
+		magnitude, ok := scaleMagnitude(7)
 
 		assert.True(t, ok, "positive scale should be accepted")
-		assert.False(t, negative, "positive scale should not be marked negative")
 		assert.Equal(t, 7, magnitude, "magnitude mismatch")
 	})
 
 	t.Run("negative scale", func(t *testing.T) {
-		magnitude, negative, ok := scaleMagnitude(-7)
+		magnitude, ok := scaleMagnitude(-7)
 
 		assert.True(t, ok, "negative scale should be accepted")
-		assert.True(t, negative, "negative scale should be marked negative")
 		assert.Equal(t, 7, magnitude, "magnitude mismatch")
 	})
 
 	t.Run("minimum int scale", func(t *testing.T) {
-		_, _, ok := scaleMagnitude(-int(^uint(0)>>1) - 1)
+		_, ok := scaleMagnitude(-int(^uint(0)>>1) - 1)
 
 		assert.False(t, ok, "minimum int scale cannot be represented as a positive int")
 	})

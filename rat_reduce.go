@@ -1,5 +1,7 @@
 package zerorat
 
+import "math/bits"
+
 // Reduce reduces the rational number to its lowest terms (mutable operation).
 // Uses the Euclidean algorithm to find the GCD and divides both numerator and denominator by it.
 // If the rational number is invalid, it remains invalid.
@@ -73,8 +75,14 @@ func (r *Rat) Round(roundType RoundType, scale int) {
 	// Handle overflow in scale factor calculation
 	if scaleFactorOverflow {
 		if scale >= 0 {
-			// Very large positive scale - result would be extremely precise
-			// For practical purposes, mark as invalid
+			reduced := *r
+			reduced.Reduce()
+			if denominatorDividesPowerOf10(reduced.denominator, scale) {
+				r.numerator = reduced.numerator
+				r.denominator = reduced.denominator
+				return
+			}
+
 			r.Invalidate()
 			return
 		}
@@ -118,6 +126,32 @@ func (r *Rat) reduceForRound() bool {
 	return r.numerator != oldNumerator || r.denominator != oldDenominator
 }
 
+// denominatorDividesPowerOf10 reports whether denominator needs no more than scale decimal places.
+func denominatorDividesPowerOf10(denominator uint64, scale int) bool {
+	if denominator == 0 || scale < 0 {
+		return false
+	}
+
+	twoCount := 0
+	for denominator%2 == 0 {
+		denominator /= 2
+		twoCount++
+	}
+
+	fiveCount := 0
+	for denominator%5 == 0 {
+		denominator /= 5
+		fiveCount++
+	}
+
+	requiredScale := twoCount
+	if fiveCount > requiredScale {
+		requiredScale = fiveCount
+	}
+
+	return denominator == 1 && requiredScale <= scale
+}
+
 // roundToDecimalPlaces handles rounding to a positive number of decimal places.
 func (r *Rat) roundToDecimalPlaces(scaleFactor uint64, roundType RoundType) {
 	// Round to decimal places
@@ -156,11 +190,29 @@ func (r *Rat) roundToDecimalPlaces(scaleFactor uint64, roundType RoundType) {
 
 	// Check for overflow in numerator multiplication
 	if willOverflowInt64MulUint64(r.numerator, scaleFactor) {
-		if r.reduceForRound() {
-			r.roundToDecimalPlaces(scaleFactor, roundType)
+		scaledNumerator := mulInt64ByUint64ToSigned128(r.numerator, scaleFactor)
+		roundedScaled, ok := roundSigned128Division(scaledNumerator, r.denominator, roundType)
+		if !ok {
+			r.Invalidate()
 			return
 		}
-		r.Invalidate()
+
+		roundedInt, ok := divSigned128ByUint64ToInt64(roundedScaled, 1)
+		if ok {
+			r.numerator = roundedInt
+			r.denominator = scaleFactor
+			return
+		}
+
+		commonDivisor := gcdSigned128Uint64(roundedScaled, scaleFactor)
+		reducedNumerator, ok := divSigned128ByUint64ToInt64(roundedScaled, commonDivisor)
+		if !ok {
+			r.Invalidate()
+			return
+		}
+
+		r.numerator = reducedNumerator
+		r.denominator = scaleFactor / commonDivisor
 		return
 	}
 
@@ -193,11 +245,25 @@ func (r *Rat) roundToPowersOfTen(scaleFactor uint64, roundType RoundType) {
 
 	// Check for overflow in denominator multiplication
 	if willOverflowUint64Mul(r.denominator, scaleFactor) {
-		if r.reduceForRound() {
-			r.roundToPowersOfTen(scaleFactor, roundType)
+		scaledDenominatorHi, scaledDenominatorLo := bits.Mul64(r.denominator, scaleFactor)
+		roundedInt, ok := roundInt64ByUint128Denominator(
+			r.numerator,
+			scaledDenominatorHi,
+			scaledDenominatorLo,
+			roundType,
+		)
+		if !ok {
+			r.Invalidate()
 			return
 		}
-		r.Invalidate()
+		newNum, ok := mulInt64ByUint64ToInt64(roundedInt, scaleFactor)
+		if !ok {
+			r.Invalidate()
+			return
+		}
+
+		r.numerator = newNum
+		r.denominator = 1
 		return
 	}
 
