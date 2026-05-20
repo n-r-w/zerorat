@@ -17,7 +17,7 @@ Zero-allocation rational number library for Go, providing big.Rat-like functiona
 - **Cumulative rounding redistribution** that keeps per-item order and rounded totals aligned
 - **Overflow-safe comparisons** using 128-bit arithmetic via math/bits package
 - **Overflow detection** with graceful invalid state handling
-- **Optional fraction reduction** using greatest common divisor algorithm (call Reduce() when needed)
+- **Conditional fraction reduction** that keeps small operations fast and reduces large intermediates before avoidable overflow
 - **Value semantics** with pointer receivers as requested
 
 ## Installation
@@ -57,13 +57,13 @@ if err != nil {
 factor := FactorFromPercent(NewFromInt64(20)) // 6/5, which means “increase by 20%”
 gross := NewFromInt64(100).Multiplied(factor) // 120/1
 
-// Mutable operations (results not auto-reduced)
+// Mutable operations (small arithmetic, scaling, and rounding results stay on the fast path)
 a.Add(b)                 // a = 3/4 + 5/1 = (3*1 + 5*4)/(4*1) = 23/4
 a.Add(c)                 // explicit conversion first, then exact arithmetic
 a.Add(d)                 // approximate path is opt-in and named explicitly
-a.Reduce()               // a = 23/4 (manually reduce if needed)
+a.Reduce()               // force lowest terms when representation matters
 
-// Immutable operations  
+// Immutable operations
 result := a.Added(b)     // returns new value, a unchanged
 
 // Comparisons
@@ -196,22 +196,42 @@ There are two validation functions available:
 
 ## Current benchmark snapshot
 
-Benchmarks below were run in this session on **darwin/arm64 (Apple M4 Max)** with `go test -run '^$' -bench ... -benchmem ./...`.
+Benchmarks below are for **darwin/arm64 (Apple M4 Max)** with `go test -run '^$' -bench . -benchmem ./...`.
 
 | Benchmark | Time | Memory | Allocations |
 |-----------|------|--------|-------------|
-| `BenchmarkZeroRat_NewFromFloat64Exact` | 3.160 ns/op | 0 B/op | 0 allocs/op |
-| `BenchmarkZeroRat_NewApproxFromFloat64` | 4.659 ns/op | 0 B/op | 0 allocs/op |
-| `BenchmarkZeroRat_NewFromFloat32Exact` | 3.672 ns/op | 0 B/op | 0 allocs/op |
-| `BenchmarkNewMoneyFloat` | 4.364 ns/op | 0 B/op | 0 allocs/op |
-| `BenchmarkMoneyMulRat` | 4.034 ns/op | 0 B/op | 0 allocs/op |
-| `BenchmarkMoneyDivRat` | 4.835 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_Construction` | 16.76 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_Add` | 5.295 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_AddImmutable` | 5.211 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_Mul` | 3.573 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_Div` | 3.875 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_ScaleDown` | 2.052 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_ScaleUp` | 2.391 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_MulConditionalReduction` | 4.848 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_AddConditionalReduction` | 68.73 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_SubConditionalReduction` | 71.23 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_DivConditionalReduction` | 9.099 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_ScaleDownConditionalReduction` | 8.839 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_ScaleUpConditionalReduction` | 6.104 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_RoundPositiveScaleRecovery` | 7.667 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_RoundNegativeScaleRecovery` | 7.145 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_Equal` | 2.721 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_String` | 48.84 ns/op | 16 B/op | 2 allocs/op |
+| `BenchmarkZeroRat_ComplexExpression` | 17.10 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_ArrayOperations` | 1528 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_NewFromFloat64Exact` | 3.172 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_NewApproxFromFloat64` | 4.376 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkZeroRat_NewFromFloat32Exact` | 3.697 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkNewMoneyFloat` | 4.318 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkMoneyMulRat` | 4.960 ns/op | 0 B/op | 0 allocs/op |
+| `BenchmarkMoneyDivRat` | 5.862 ns/op | 0 B/op | 0 allocs/op |
 
 ## Limitations
 
 - Numbers must fit within int64 (numerator) and uint64 (denominator) ranges
 - No arbitrary precision support
-- Arithmetic overflow results in invalid state rather than expanding precision
+- Unrecoverable overflow and exact results outside `Rat` limits produce invalid state rather than expanding precision
+- Recoverable intermediate overflow may be reduced or cancelled
 - Exact float conversion returns `ErrNonFiniteFloat` or `ErrNotRepresentable` instead of changing the value silently
 - `NewFromDecimalString` returns `ErrInvalidDecimalString` for malformed input and `ErrNotRepresentable` when the exact value does not fit in `Rat`
 - `ToDecimalString` returns `ErrNonTerminatingDecimal` for values that do not have a finite decimal form, such as `1/3`
@@ -220,7 +240,7 @@ Benchmarks below were run in this session on **darwin/arm64 (Apple M4 Max)** wit
 ## Use Cases
 
 - High-frequency trading systems
-- Scientific computing with rational arithmetic  
+- Scientific computing with rational arithmetic
 - Game engines using rational coordinates
 - Financial calculations requiring exact fractions
 - Any performance-critical rational number operations

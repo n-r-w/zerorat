@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestRat_Round_InvalidState tests that invalid rationals remain invalid after rounding
@@ -134,19 +135,19 @@ func TestRat_Round_PositiveScale(t *testing.T) {
 		expected  Rat
 	}{
 		// Scale 1 (one decimal place)
-		{"1.23 scale 1 RoundDown", New(123, 100), RoundDown, 1, New(12, 10)},     // 1.23 -> 1.2
-		{"1.27 scale 1 RoundUp", New(127, 100), RoundUp, 1, New(13, 10)},         // 1.27 -> 1.3
-		{"1.25 scale 1 RoundHalfUp", New(125, 100), RoundHalfUp, 1, New(13, 10)}, // 1.25 -> 1.3
+		{"1.23 scale 1 RoundDown", New(123, 100), RoundDown, 1, Rat{numerator: 12, denominator: 10}}, // 1.23 -> 1.2
+		{"1.27 scale 1 RoundUp", New(127, 100), RoundUp, 1, New(13, 10)},                             // 1.27 -> 1.3
+		{"1.25 scale 1 RoundHalfUp", New(125, 100), RoundHalfUp, 1, New(13, 10)},                     // 1.25 -> 1.3
 
 		// Scale 2 (two decimal places)
-		{"1.234 scale 2 RoundDown", New(1234, 1000), RoundDown, 2, New(123, 100)},     // 1.234 -> 1.23
-		{"1.236 scale 2 RoundUp", New(1236, 1000), RoundUp, 2, New(124, 100)},         // 1.236 -> 1.24
-		{"1.235 scale 2 RoundHalfUp", New(1235, 1000), RoundHalfUp, 2, New(124, 100)}, // 1.235 -> 1.24
+		{"1.234 scale 2 RoundDown", New(1234, 1000), RoundDown, 2, New(123, 100)},                             // 1.234 -> 1.23
+		{"1.236 scale 2 RoundUp", New(1236, 1000), RoundUp, 2, Rat{numerator: 124, denominator: 100}},         // 1.236 -> 1.24
+		{"1.235 scale 2 RoundHalfUp", New(1235, 1000), RoundHalfUp, 2, Rat{numerator: 124, denominator: 100}}, // 1.235 -> 1.24
 
 		// Negative numbers
-		{"-1.27 scale 1 RoundDown", New(-127, 100), RoundDown, 1, New(-12, 10)},     // -1.27 -> -1.2
-		{"-1.23 scale 1 RoundUp", New(-123, 100), RoundUp, 1, New(-13, 10)},         // -1.23 -> -1.3
-		{"-1.25 scale 1 RoundHalfUp", New(-125, 100), RoundHalfUp, 1, New(-12, 10)}, // -1.25 -> -1.2
+		{"-1.27 scale 1 RoundDown", New(-127, 100), RoundDown, 1, Rat{numerator: -12, denominator: 10}},     // -1.27 -> -1.2
+		{"-1.23 scale 1 RoundUp", New(-123, 100), RoundUp, 1, New(-13, 10)},                                 // -1.23 -> -1.3
+		{"-1.25 scale 1 RoundHalfUp", New(-125, 100), RoundHalfUp, 1, Rat{numerator: -12, denominator: 10}}, // -1.25 -> -1.2
 	}
 
 	for _, tt := range tests {
@@ -207,8 +208,8 @@ func TestRat_Round_EdgeCases(t *testing.T) {
 	}{
 		// Already exact at the requested scale
 		{"exact integer scale 0", New(5, 1), RoundDown, 0, New(5, 1)},
-		{"exact decimal scale 1", New(15, 10), RoundUp, 1, New(3, 2)},       // 3/2 -> 3/2 (already exact, reduced form)
-		{"exact decimal scale 2", New(125, 100), RoundHalfUp, 2, New(5, 4)}, // 5/4 -> 5/4 (already exact, reduced form)
+		{"exact decimal scale 1", New(15, 10), RoundUp, 1, Rat{numerator: 15, denominator: 10}},         // 3/2 -> 1.5 at requested scale
+		{"exact decimal scale 2", New(125, 100), RoundHalfUp, 2, Rat{numerator: 125, denominator: 100}}, // 5/4 -> 1.25 at requested scale
 
 		// Zero with various scales
 		{"zero scale 0", New(0, 1), RoundDown, 0, New(0, 1)},
@@ -248,19 +249,129 @@ func TestRat_Round_MutableOperation(t *testing.T) {
 // TestRat_Round_OverflowScenarios tests potential overflow scenarios
 func TestRat_Round_OverflowScenarios(t *testing.T) {
 	tests := []struct {
-		name        string
-		rat         Rat
-		roundType   RoundType
-		scale       int
-		expectValid bool
+		name      string
+		rat       Rat
+		roundType RoundType
+		scale     int
+		wantValid bool
+		wantNum   int64
+		wantDenom uint64
 	}{
-		// Very large scale that might cause overflow in power-of-10 calculation
-		{"large positive scale", New(1, 3), RoundDown, 100, false},   // May cause overflow
-		{"large negative scale", New(123, 1), RoundDown, -100, true}, // Should be valid (rounds to 0)
-
-		// Large numerator with scaling
-		{"max int64 with scale", Rat{numerator: math.MaxInt64, denominator: 1}, RoundDown, 1, true}, // max int64
-		{"min int64 with scale", Rat{numerator: math.MinInt64, denominator: 1}, RoundDown, 1, true}, // min int64
+		{
+			name:      "large positive scale invalidates",
+			rat:       New(1, 3),
+			roundType: RoundDown,
+			scale:     100,
+			wantValid: false,
+		},
+		{
+			name:      "large positive scale preserves exact integer",
+			rat:       New(1, 1),
+			roundType: RoundDown,
+			scale:     20,
+			wantValid: true,
+			wantNum:   1,
+			wantDenom: 1,
+		},
+		{
+			name:      "large positive scale preserves exact decimal",
+			rat:       New(1, 10),
+			roundType: RoundDown,
+			scale:     20,
+			wantValid: true,
+			wantNum:   1,
+			wantDenom: 10,
+		},
+		{
+			name:      "large negative scale rounds to zero",
+			rat:       New(123, 1),
+			roundType: RoundDown,
+			scale:     -100,
+			wantValid: true,
+			wantNum:   0,
+			wantDenom: 1,
+		},
+		{
+			name:      "max int64 exact scale stays unchanged",
+			rat:       Rat{numerator: math.MaxInt64, denominator: 1},
+			roundType: RoundDown,
+			scale:     1,
+			wantValid: true,
+			wantNum:   math.MaxInt64,
+			wantDenom: 1,
+		},
+		{
+			name:      "min int64 exact scale stays unchanged",
+			rat:       Rat{numerator: math.MinInt64, denominator: 1},
+			roundType: RoundDown,
+			scale:     1,
+			wantValid: true,
+			wantNum:   math.MinInt64,
+			wantDenom: 1,
+		},
+		{
+			name:      "positive scale overflow returns representable rounded value",
+			rat:       New(1_000_000_000_000_000_000, 3),
+			roundType: RoundDown,
+			scale:     1,
+			wantValid: true,
+			wantNum:   3_333_333_333_333_333_333,
+			wantDenom: 10,
+		},
+		{
+			name:      "positive scale overflow reduces rounded quotient before int64 check",
+			rat:       New(math.MaxInt64, 8),
+			roundType: RoundDown,
+			scale:     1,
+			wantValid: true,
+			wantNum:   5_764_607_523_034_234_879,
+			wantDenom: 5,
+		},
+		{
+			name:      "negative positive-scale overflow reduces rounded quotient before int64 check",
+			rat:       New(-math.MaxInt64, 8),
+			roundType: RoundDown,
+			scale:     1,
+			wantValid: true,
+			wantNum:   -5_764_607_523_034_234_879,
+			wantDenom: 5,
+		},
+		{
+			name:      "negative positive-scale overflow above uint64 reduces to min int64 numerator",
+			rat:       New(-5_534_023_222_112_865_485, 3),
+			roundType: RoundDown,
+			scale:     1,
+			wantValid: true,
+			wantNum:   math.MinInt64,
+			wantDenom: 5,
+		},
+		{
+			name:      "round up overflow increment reduces before int64 check",
+			rat:       New(8_301_034_833_169_298_227, 9),
+			roundType: RoundUp,
+			scale:     1,
+			wantValid: true,
+			wantNum:   4_611_686_018_427_387_904,
+			wantDenom: 5,
+		},
+		{
+			name:      "round half up overflow increment reduces before int64 check",
+			rat:       New(3_689_348_814_741_910_323, 4),
+			roundType: RoundHalfUp,
+			scale:     1,
+			wantValid: true,
+			wantNum:   4_611_686_018_427_387_904,
+			wantDenom: 5,
+		},
+		{
+			name:      "negative scale denominator overflow rounds to zero",
+			rat:       New(1, math.MaxUint64),
+			roundType: RoundDown,
+			scale:     -1,
+			wantValid: true,
+			wantNum:   0,
+			wantDenom: 1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -268,19 +379,76 @@ func TestRat_Round_OverflowScenarios(t *testing.T) {
 			r := tt.rat
 			r.Round(tt.roundType, tt.scale)
 
-			if tt.expectValid {
-				assert.True(t, r.IsValid(), "result should be valid")
-			} else {
-				// For overflow cases, the function should either succeed or mark as invalid
-				// We don't require it to fail, just that it handles the case gracefully
-				assert.True(t, r.IsValid() || r.IsInvalid(), "result should have valid state (either valid or invalid)")
+			if !tt.wantValid {
+				assert.True(t, r.IsInvalid(), "result should be invalid")
+				return
 			}
+
+			require.True(t, r.IsValid(), "result should be valid")
+			assert.Equal(t, tt.wantNum, r.numerator, "numerator mismatch")
+			assert.Equal(t, tt.wantDenom, r.denominator, "denominator mismatch")
 		})
 	}
 }
 
-// TestRat_Round_ReductionBehavior tests that results are properly reduced
-func TestRat_Round_ReductionBehavior(t *testing.T) {
+// TestRat_Round_LargeDenominator verifies rounding when the denominator uses the full uint64 range.
+func TestRat_Round_LargeDenominator(t *testing.T) {
+	tests := []struct {
+		name      string
+		rat       Rat
+		roundType RoundType
+		expected  Rat
+	}{
+		{"positive RoundDown", Rat{numerator: 1, denominator: math.MaxUint64}, RoundDown, New(0, 1)},
+		{"positive RoundUp", Rat{numerator: 1, denominator: math.MaxUint64}, RoundUp, New(1, 1)},
+		{"positive RoundHalfUp", Rat{numerator: 1, denominator: math.MaxUint64}, RoundHalfUp, New(0, 1)},
+		{"MinInt64 RoundHalfUp", Rat{numerator: math.MinInt64, denominator: math.MaxUint64}, RoundHalfUp, New(-1, 1)},
+		{"MaxInt64 RoundHalfUp", Rat{numerator: math.MaxInt64, denominator: math.MaxUint64}, RoundHalfUp, New(0, 1)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := tt.rat
+			r.Round(tt.roundType, 0)
+
+			assert.True(t, r.IsValid(), "result should be valid")
+			assert.Equal(t, tt.expected.numerator, r.numerator, "numerator mismatch")
+			assert.Equal(t, tt.expected.denominator, r.denominator, "denominator mismatch")
+		})
+	}
+}
+
+// TestRat_Round_ReducesBeforeOverflow verifies retry behavior when rounding needs a compact representation.
+func TestRat_Round_ReducesBeforeOverflow(t *testing.T) {
+	t.Run("positive scale", func(t *testing.T) {
+		r := Rat{numerator: 1_000_000_000_000_000_000, denominator: 20}
+		r.Round(RoundDown, 1)
+
+		assert.True(t, r.IsValid(), "result should be valid")
+		assert.Equal(t, int64(500_000_000_000_000_000), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(10), r.denominator, "denominator mismatch")
+	})
+
+	t.Run("negative scale", func(t *testing.T) {
+		r := Rat{numerator: 2, denominator: 2}
+		r.Round(RoundDown, -19)
+
+		assert.True(t, r.IsValid(), "result should be valid")
+		assert.Equal(t, int64(0), r.numerator, "numerator mismatch")
+		assert.Equal(t, uint64(1), r.denominator, "denominator mismatch")
+	})
+
+	t.Run("unrecoverable positive scale", func(t *testing.T) {
+		r := Rat{numerator: math.MaxInt64, denominator: 3}
+		r.Round(RoundDown, 1)
+
+		assert.True(t, r.IsInvalid(), "unrepresentable rounded value should invalidate")
+	})
+}
+
+// TestRat_Round_ConditionalReductionBehavior tests that rounded results are not
+// reduced solely for representation when they remain below the size threshold.
+func TestRat_Round_ConditionalReductionBehavior(t *testing.T) {
 	tests := []struct {
 		name      string
 		rat       Rat
@@ -288,7 +456,7 @@ func TestRat_Round_ReductionBehavior(t *testing.T) {
 		scale     int
 		checkGCD  bool // whether to verify the result is in lowest terms
 	}{
-		// Results that should be reduced
+		// Results whose requested-scale form is already in lowest terms.
 		{"fraction result should be reduced", New(10, 3), RoundDown, 1, true}, // 3.333... -> 3.3 -> 33/10
 		{"integer result", New(7, 2), RoundDown, 0, true},                     // 3.5 -> 3 -> 3/1
 		{"decimal result", New(125, 100), RoundHalfUp, 1, true},               // 1.25 -> 1.3 -> 13/10
@@ -328,7 +496,7 @@ func TestRat_Round_ConsistencyWithFloatRounding(t *testing.T) {
 
 		// Decimal place rounding consistency
 		{"decimal tie-breaking", New(125, 100), RoundHalfUp, 1, New(13, 10), "1.25 should round up to 1.3"},
-		{"negative decimal tie", New(-125, 100), RoundHalfUp, 1, New(-12, 10), "-1.25 should round toward positive (-1.2)"},
+		{"negative decimal tie", New(-125, 100), RoundHalfUp, 1, Rat{numerator: -12, denominator: 10}, "-1.25 should round toward positive (-1.2)"},
 	}
 
 	for _, tt := range tests {
@@ -360,9 +528,9 @@ func TestRat_Round_AllRoundTypesComparison(t *testing.T) {
 		{"-2.5 to integer", New(-25, 10), 0, New(-2, 1), New(-3, 1), New(-2, 1)}, // half up toward positive
 
 		// Decimal rounding (scale 1)
-		{"1.23 to 1 decimal", New(123, 100), 1, New(12, 10), New(13, 10), New(12, 10)},
-		{"1.27 to 1 decimal", New(127, 100), 1, New(12, 10), New(13, 10), New(13, 10)},
-		{"1.25 to 1 decimal", New(125, 100), 1, New(12, 10), New(13, 10), New(13, 10)}, // half up
+		{"1.23 to 1 decimal", New(123, 100), 1, Rat{numerator: 12, denominator: 10}, New(13, 10), Rat{numerator: 12, denominator: 10}},
+		{"1.27 to 1 decimal", New(127, 100), 1, Rat{numerator: 12, denominator: 10}, New(13, 10), New(13, 10)},
+		{"1.25 to 1 decimal", New(125, 100), 1, Rat{numerator: 12, denominator: 10}, New(13, 10), New(13, 10)}, // half up
 	}
 
 	for _, tt := range tests {

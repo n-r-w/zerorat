@@ -76,9 +76,9 @@ Prefer mutable methods when the caller clearly wants in-place updates. Prefer im
 ## Arithmetic, reduction, and error semantics
 
 ### `Rat`
-- `New` reduces immediately, but arithmetic methods do not auto-reduce.
-- Call `Reduce()` / `Reduced()` only when lowest terms are actually needed.
-- Overflow or invalid operations usually produce an invalid value instead of widening precision.
+- `New` reduces immediately. `Add`, `Sub`, `Mul`, `Div`, `ScaleUp`, `ScaleDown`, and `Round` keep small results on the fast path and reduce or cancel large intermediates when that avoids preventable overflow.
+- Call `Reduce()` / `Reduced()` when lowest terms are required by the caller, not just for overflow safety.
+- Unrecoverable overflow, exact results outside `Rat` limits, and invalid operations produce an invalid value instead of widening precision.
 - `Rat` can compare directly with primitive values:
   - `CompareInt64`, `EqualInt64`, `LessInt64`, `GreaterInt64`
   - `CompareFloat64`, `EqualFloat64`, `LessFloat64`, `GreaterFloat64`
@@ -220,7 +220,7 @@ _ = ratioBig
 - Confusing a factor like `6/5` with a percentage result like `20/100`.
 - Assuming every `Rat` can be formatted as a finite decimal string.
 - Assuming every `*big.Rat` can be converted into `Rat` without checking package limits.
-- Assuming arithmetic auto-reduces.
+- Assuming arithmetic always returns lowest terms.
 - Using `NewMoneyFloat` for decimal currency semantics.
 - Assuming `Money.String()` is user-facing display formatting.
 - Forgetting that money methods taking another `Money` require matching currencies.

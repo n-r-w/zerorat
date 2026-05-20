@@ -8,6 +8,83 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
+const (
+	autoReduceThreshold uint64 = 1 << 62
+	uint64BitSize              = 64
+	uint64TopBitShift          = uint64BitSize - 1
+	halfDivisor                = 2
+)
+
+// signed128 stores a signed 128-bit integer as sign plus unsigned magnitude.
+// It is used only for overflow recovery paths where a temporary numerator may
+// exceed int64 before reduction brings it back into the Rat range.
+type signed128 struct {
+	negative bool
+	hi       uint64
+	lo       uint64
+}
+
+// isZero reports whether the signed 128-bit magnitude is zero.
+func (v signed128) isZero() bool {
+	return v.hi == 0 && v.lo == 0
+}
+
+// normalize clears the sign on zero so comparisons and division stay stable.
+func (v signed128) normalize() signed128 {
+	if v.isZero() {
+		v.negative = false
+	}
+	return v
+}
+
+// negateSigned128 flips the sign without creating a negative zero value.
+func negateSigned128(v signed128) signed128 {
+	if v.isZero() {
+		return v.normalize()
+	}
+	v.negative = !v.negative
+	return v
+}
+
+// mulInt64ByUint64ToSigned128 multiplies a signed int64 by uint64 and keeps the
+// exact 128-bit magnitude for later reduction.
+func mulInt64ByUint64ToSigned128(a int64, b uint64) signed128 {
+	aAbs := absInt64ToUint64(a)
+	hi, lo := bits.Mul64(aAbs, b)
+	return signed128{negative: a < 0, hi: hi, lo: lo}.normalize()
+}
+
+// addSigned128 adds two signed 128-bit values and reports overflow outside the
+// internal 128-bit recovery range.
+func addSigned128(a, b signed128) (signed128, bool) {
+	if a.negative == b.negative {
+		lo, carry := bits.Add64(a.lo, b.lo, 0)
+		hi, carry := bits.Add64(a.hi, b.hi, carry)
+		if carry != 0 {
+			return signed128{}, false
+		}
+		return signed128{negative: a.negative, hi: hi, lo: lo}.normalize(), true
+	}
+
+	cmp := compare128Bit(a.hi, a.lo, b.hi, b.lo)
+	if cmp == 0 {
+		return signed128{}, true
+	}
+
+	negative := a.negative
+	leftHi, leftLo := a.hi, a.lo
+	rightHi, rightLo := b.hi, b.lo
+	if cmp < 0 {
+		negative = b.negative
+		leftHi, leftLo = b.hi, b.lo
+		rightHi, rightLo = a.hi, a.lo
+	}
+
+	lo, borrow := bits.Sub64(leftLo, rightLo, 0)
+	hi, _ := bits.Sub64(leftHi, rightHi, borrow)
+	return signed128{negative: negative, hi: hi, lo: lo}.normalize(), true
+}
+
 // willOverflowUint64Mul checks if multiplying two uint64 values would overflow.
 // Uses math/bits for improved clarity and performance.
 func willOverflowUint64Mul(a, b uint64) bool {
@@ -94,6 +171,24 @@ func uint64ToInt64WithSign(u uint64, neg bool) (int64, bool) {
 	return int64(u), true
 }
 
+// divInt64ByUint64Exact divides a signed numerator by a known exact unsigned
+// divisor without unsafe casts around math.MinInt64.
+func divInt64ByUint64Exact(value int64, divisor uint64) (int64, bool) {
+	if divisor == 0 {
+		return 0, false
+	}
+	if divisor == 1 {
+		return value, true
+	}
+
+	absValue := absInt64ToUint64(value)
+	if absValue%divisor != 0 {
+		return 0, false
+	}
+	absValue /= divisor
+	return uint64ToInt64WithSign(absValue, value < 0)
+}
+
 // addInt64AndUint64ToInt64 adds a signed int64 value and a positive uint64 value.
 // It returns ok=false if the exact result cannot be represented as int64.
 func addInt64AndUint64ToInt64(signed int64, positive uint64) (int64, bool) {
@@ -145,6 +240,135 @@ func gcdUint64(a, b uint64) uint64 {
 		a, b = b, a%b
 	}
 	return a
+}
+
+// scaleMagnitude returns the absolute scale.
+// It rejects the minimum int value because its absolute value cannot be represented as int.
+func scaleMagnitude(scale int) (magnitude int, ok bool) {
+	if scale >= 0 {
+		return scale, true
+	}
+
+	// The minimum int value has no positive counterpart on two's-complement
+	// platforms, so callers must treat it as an unsupported scale.
+	minInt := -int(^uint(0)>>1) - 1
+	if scale == minInt {
+		return 0, false
+	}
+
+	return -scale, true
+}
+
+// appendBitModulo appends one high-to-low binary digit to a running remainder.
+// It handles the temporary 65-bit value produced by remainder*2+bit without
+// using division operations that panic for large high words.
+func appendBitModulo(remainder, bit, divisor uint64) uint64 {
+	// Keep the remainder below the divisor while appending a bit from the 128-bit
+	// input. If the left shift overflows, the implicit high bit contributes one
+	// divisor subtraction in binary long division.
+	highBit := remainder >> uint64TopBitShift
+	next := (remainder << 1) | bit
+	if highBit != 0 || next >= divisor {
+		return next - divisor
+	}
+	return next
+}
+
+// modUint128ByUint64 returns a 128-bit unsigned magnitude modulo a uint64 divisor.
+func modUint128ByUint64(hi, lo, divisor uint64) uint64 {
+	if divisor == 0 {
+		// GCD helpers use zero as an invalid divisor marker. Returning zero keeps
+		// that marker explicit and avoids a divide-by-zero panic.
+		return 0
+	}
+	if divisor == 1 {
+		return 0
+	}
+
+	// bits.Div64 requires divisor > high word. Binary long division has no such
+	// precondition, so it is safe for any divisor and any 128-bit magnitude.
+	remainder := uint64(0)
+	for bitIndex := range uint64BitSize {
+		bit := (hi >> (uint64TopBitShift - bitIndex)) & 1
+		remainder = appendBitModulo(remainder, bit, divisor)
+	}
+	for bitIndex := range uint64BitSize {
+		bit := (lo >> (uint64TopBitShift - bitIndex)) & 1
+		remainder = appendBitModulo(remainder, bit, divisor)
+	}
+	return remainder
+}
+
+// gcdSigned128Uint64 calculates gcd(abs(value), divisor) without converting the
+// temporary 128-bit numerator back to int64 first.
+func gcdSigned128Uint64(value signed128, divisor uint64) uint64 {
+	if divisor == 0 {
+		// No valid denominator factor exists. The caller will fail the conversion
+		// path instead of building a wrapped result.
+		return 0
+	}
+	if value.isZero() {
+		// gcd(0, d) is d, which lets zero numerators normalize to 0/1 upstream.
+		return divisor
+	}
+	// Euclid only needs value modulo divisor, so the full 128-bit numerator never
+	// has to be converted back to int64 for gcd calculation.
+	return gcdUint64(modUint128ByUint64(value.hi, value.lo, divisor), divisor)
+}
+
+// divSigned128ByUint64ToInt64 divides an exact 128-bit numerator by divisor and
+// returns the signed int64 result when the reduced value fits into Rat.
+func divSigned128ByUint64ToInt64(value signed128, divisor uint64) (int64, bool) {
+	if divisor == 0 {
+		return 0, false
+	}
+	if value.hi >= divisor {
+		// bits.Div64 would panic here, and the quotient would not fit into one word.
+		return 0, false
+	}
+
+	quotient, remainder := bits.Div64(value.hi, value.lo, divisor)
+	if remainder != 0 {
+		// Recovery paths call this only when reduction should be exact.
+		return 0, false
+	}
+
+	// The final signed magnitude must fit int64, including the MinInt64 edge when
+	// the result is negative.
+	return uint64ToInt64WithSign(quotient, value.negative)
+}
+
+// compareRemainderToHalf compares remainder/denominator with one half without
+// doubling the remainder, which can overflow uint64.
+func compareRemainderToHalf(remainder, denominator uint64) int {
+	// Compare with denominator/2 directly. Multiplying the remainder by two would
+	// wrap for remainders in the top half of uint64.
+	half := denominator / halfDivisor
+	if remainder > half {
+		return 1
+	}
+	if denominator%halfDivisor == 0 && remainder == half {
+		return 0
+	}
+	return -1
+}
+
+// shouldAutoReduce reports whether a valid Rat is large enough to justify gcd
+// work after an arithmetic operation.
+func shouldAutoReduce(numerator int64, denominator uint64) bool {
+	// A high threshold keeps small hot-path operations free of gcd work while
+	// leaving enough headroom before int64 and uint64 limits.
+	return absInt64ToUint64(numerator) >= autoReduceThreshold || denominator >= autoReduceThreshold
+}
+
+// reduceIfLarge keeps intermediate arithmetic values compact without paying the
+// gcd cost on the small-value path.
+func (r *Rat) reduceIfLarge() {
+	// Invalid values must stay invalid; Reduce would otherwise treat denominator
+	// zero as part of a gcd calculation.
+	if r.IsValid() && shouldAutoReduce(r.numerator, r.denominator) {
+		r.Reduce()
+	}
 }
 
 // absInt64ToUint64 converts an int64 to its absolute value as uint64.
@@ -286,8 +510,129 @@ func willOverflowInt64MulUint64(a int64, b uint64) bool {
 	return absA > (uint64(math.MaxInt64)+1)/b
 }
 
+// divSigned128ByUint64 divides a signed 128-bit value by a uint64 divisor.
+// The quotient keeps the input sign, and the remainder is always a magnitude.
+func divSigned128ByUint64(value signed128, divisor uint64) (signed128, uint64, bool) {
+	if divisor == 0 {
+		return signed128{}, 0, false
+	}
+	if value.isZero() {
+		return signed128{}, 0, true
+	}
+
+	quotientHi := value.hi / divisor
+	highRemainder := value.hi % divisor
+	quotientLo, remainder := bits.Div64(highRemainder, value.lo, divisor)
+
+	quotient := signed128{negative: value.negative, hi: quotientHi, lo: quotientLo}.normalize()
+	return quotient, remainder, true
+}
+
+// roundSigned128Division rounds a signed 128-bit numerator divided by a uint64 denominator.
+func roundSigned128Division(numerator signed128, denominator uint64, roundType RoundType) (signed128, bool) {
+	quotient, remainder, ok := divSigned128ByUint64(numerator, denominator)
+	if !ok {
+		return signed128{}, false
+	}
+
+	return applyRoundingToQuotient(quotient, remainder, denominator, numerator.negative, roundType)
+}
+
+// roundInt64ByUint128Denominator rounds an int64 numerator divided by a 128-bit
+// denominator. It is used when negative-scale rounding makes the denominator exceed uint64.
+func roundInt64ByUint128Denominator(
+	numerator int64,
+	denominatorHi, denominatorLo uint64,
+	roundType RoundType,
+) (int64, bool) {
+	if denominatorHi == 0 {
+		if denominatorLo == 0 {
+			return 0, false
+		}
+		return roundDivision(numerator, denominatorLo, roundType), true
+	}
+	if numerator == 0 {
+		return 0, true
+	}
+
+	negative := numerator < 0
+	remainder := absInt64ToUint64(numerator)
+	quotient := int64(0)
+
+	if roundType != RoundDown && roundType != RoundUp && roundType != RoundHalfUp {
+		return quotient, true
+	}
+	if roundType == RoundDown {
+		return quotient, true
+	}
+	if roundType == RoundUp {
+		if negative {
+			return -1, true
+		}
+		return 1, true
+	}
+
+	halfComparison := compareUint64RemainderToHalf128(remainder, denominatorHi, denominatorLo)
+	if halfComparison > 0 {
+		if negative {
+			return -1, true
+		}
+		return 1, true
+	}
+	if halfComparison == 0 && !negative {
+		return 1, true
+	}
+	return quotient, true
+}
+
+// compareUint64RemainderToHalf128 compares a uint64 remainder with half of a
+// 128-bit denominator.
+func compareUint64RemainderToHalf128(remainder, denominatorHi, denominatorLo uint64) int {
+	doubleHi, doubleLo := bits.Mul64(remainder, halfDivisor)
+	return compare128Bit(doubleHi, doubleLo, denominatorHi, denominatorLo)
+}
+
+// applyRoundingToQuotient applies RoundType to a truncated quotient and a uint64
+// remainder.
+func applyRoundingToQuotient(
+	quotient signed128,
+	remainder, denominator uint64,
+	negative bool,
+	roundType RoundType,
+) (signed128, bool) {
+	if remainder == 0 {
+		return quotient, true
+	}
+
+	if roundType != RoundDown && roundType != RoundUp && roundType != RoundHalfUp {
+		return quotient, true
+	}
+
+	if roundType == RoundDown {
+		return quotient, true
+	}
+
+	incrementAwayFromZero := func() (signed128, bool) {
+		one := signed128{negative: negative, lo: 1}
+		return addSigned128(quotient, one)
+	}
+
+	if roundType == RoundUp {
+		return incrementAwayFromZero()
+	}
+
+	halfComparison := compareRemainderToHalf(remainder, denominator)
+	if halfComparison > 0 {
+		return incrementAwayFromZero()
+	}
+	if halfComparison == 0 && !negative {
+		return incrementAwayFromZero()
+	}
+	return quotient, true
+}
+
 // roundDivision performs integer division with rounding according to RoundType.
-// Computes round(numerator / denominator) using the specified rounding strategy.
+// It computes round(numerator / denominator) using the specified rounding strategy.
 func roundDivision(numerator int64, denominator uint64, roundType RoundType) int64 {
 	if denominator == 0 {
 		return 0 // Should not happen, but be safe
@@ -302,12 +647,16 @@ func roundDivision(numerator int64, denominator uint64, roundType RoundType) int
 	var remainder uint64
 
 	if numerator >= 0 {
-		quotient = numerator / int64(denominator) //nolint:gosec // safe conversion
+		quotient = int64(uint64(numerator) / denominator) //nolint:gosec // quotient cannot exceed numerator
 		remainder = uint64(numerator) % denominator
 	} else {
 		// Handle negative numerator
-		absNum := uint64(-numerator)
-		quotient = -int64(absNum / denominator) //nolint:gosec // safe conversion
+		absNum := absInt64ToUint64(numerator)
+		var ok bool
+		quotient, ok = uint64ToInt64WithSign(absNum/denominator, true)
+		if !ok {
+			return 0
+		}
 		remainder = absNum % denominator
 	}
 
@@ -334,13 +683,8 @@ func roundDivision(numerator int64, denominator uint64, roundType RoundType) int
 		// Round half values toward positive infinity
 		// This means: for positive numbers, round up; for negative numbers, round toward zero
 
-		// Check if remainder * 2 compared to denominator
-		// remainder * 2 > denominator: more than half
-		// remainder * 2 = denominator: exactly half
-		// remainder * 2 < denominator: less than half
-		doubleRemainder := remainder * 2 //nolint:mnd // ok
-
-		if doubleRemainder > denominator {
+		halfComparison := compareRemainderToHalf(remainder, denominator)
+		if halfComparison > 0 {
 			// More than half - round away from zero
 			if numerator > 0 {
 				return quotient + 1
@@ -348,7 +692,7 @@ func roundDivision(numerator int64, denominator uint64, roundType RoundType) int
 			return quotient - 1
 		}
 
-		if doubleRemainder == denominator {
+		if halfComparison == 0 {
 			// Exactly half - round toward positive infinity
 			if numerator > 0 {
 				// Positive: round up (away from zero)
